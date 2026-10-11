@@ -65,8 +65,6 @@
 
 建议用较新版本的 Chrome / Edge / Firefox。
 
-想试连杆调参就双击 `build/armLink.html`（见下方「关于 build/」）。
-
 **URL 快捷入口**（接在文件名后面）：
 
 | 后缀 | 作用 |
@@ -105,10 +103,10 @@
 node web/build.js          # 在仓库根目录跑
 ```
 
-改源码之后跑一次这个，`build/` 下就有了新的单文件 HTML。
+改源码之后跑一次这个，`build/` 下就有了新的单文件 HTML（`build/armBuilder.html` 已入库，
+clone 下来直接能双击）。
 
-`build/armBuilder.html` 已入库，clone 下来直接能双击；
-`build/armLink.html` 是派生物，没入库，跑一次上面那条命令就有。
+构建只产出 `armBuilder.html` 一个文件 —— 连杆寻优那块界面已经移走了（见上）。
 
 ---
 
