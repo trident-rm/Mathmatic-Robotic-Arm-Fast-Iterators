@@ -113,6 +113,9 @@
     <div><div id="title">机械臂可行性集 · 建模器</div><div id="model"></div></div>
     <div class="chips" id="chips"></div>
     <div id="tools">
+      <label class="k">配置
+        <select id="selConfig" title="构型 = 臂型 + 规则 + 车体尺寸；在 web/src/configs/ 里加文件即可扩充"></select>
+      </label>
       <label class="k">装配臂位置
         <input type="number" id="inCx" step="10" value="-200" style="width:64px">
         <input type="number" id="inCy" step="10" value="-200" style="width:64px">
@@ -211,6 +214,16 @@
 
 <script>
 <!--__MODULE:03-chassis-size__-->
+</script>
+
+<!-- ==================================================================
+     配置层：把「具体是哪条臂 / 哪套规则 / 车体尺寸」从引擎里搬出来放这里。
+     引擎只认 CONFIG。加一个新构型 = 在 web/src/configs/ 加一个 .js
+     并在 index.txt 里登记一行，不用动引擎。
+     ================================================================== -->
+<script>
+<!--__MODULE:04-config__-->
+<!--__MODULES__-->
 </script>
 </body>
 </html>

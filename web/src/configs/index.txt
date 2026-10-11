@@ -1,0 +1,6 @@
+# web/src/configs/index.txt —— 会被打进交付物的配置清单（一行一个，不含 .js）
+#
+# 顺序 = 在界面下拉框里的顺序；第一个是兜底默认。
+# 想加一个新构型：在这里加一行，再放一个同名的 .js（见 tongji.js 的写法）。
+tongji
+demo3dof

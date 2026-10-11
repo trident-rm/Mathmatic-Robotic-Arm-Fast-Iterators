@@ -33,36 +33,29 @@ function rotZdeg(d){ const a=d*D2R,c=Math.cos(a),s=Math.sin(a);
   return [[c,-s,0],[s,c,0],[0,0,1]]; }
 
 /* ---------------- 示例模型（= 同济臂，7 段） ---------------- */
+/* ---------------- 示例 / 默认臂型 ----------------
+   ★ 这里【不再】写死同济臂的杆长与限位 —— 它已搬到 web/src/configs/tongji.js。
+     demoModel() 保留为兼容入口：读当前配置里的模型。
+     （历史上这里是第二份臂型定义，和 MATLAB 的 armSpec.m 各写一份，
+       改一处忘一处是常态。现在两边都以配置文件为准。） */
 function demoModel(){
-  const L = (name,joint,type,pos,axes,axis,limits)=>
-      ({name,joint,type,posMode:'parent',pos,axes,axis,limits});
-  const ID = {x:'+X',y:'+Y',z:'+Z'};
-  return { name:'同济工程机械臂（示例）',
-    // ★ base yaw = -90：把臂的"前方"(本体 +Y)转到 +X。
-    //   配合 MAP.swap=true（Q 轴映射到 -X），零位时 末端 z(+X) 与 Q轴(-X) 正好相对
-    //   ⇒ 正面装配，解算不会出现"绕到反面"的抽象行为（见数据面板"零位朝向校核"）
-    base:{xyz:[0,0,0], yaw:-90}, links:[
-    {name:'base_link', joint:'base_joint', type:'revolute', posMode:'origin', pos:[0,0,0],
-     axes:ID, axis:'+Z', limits:null},
-    L('link1','joint1','revolute',[0,0,75],      ID,                    '+X', [0,122]),
-    L('link2','joint2','revolute',[0,290,0],     ID,                    '-X', [-90,200]),
-    L('link3','joint3','revolute',[85.5,0,0],    ID,                    '+Z', null),
-    L('link4','joint4','revolute',[0,-30,401.47],ID,                    '+X', [-16,220]),
-    L('link5','joint5','revolute',[0,0,0],       {x:'+X',y:'-Z',z:'+Y'},'+Z', null),
-    L('gripper','gripper_fix','fixed',[0,0,211], ID,                    '+Z', null)
-  ]};
+  if (MODEL) return JSON.parse(JSON.stringify(MODEL));
+  if (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.model)
+    return JSON.parse(JSON.stringify(CONFIG.model));
+  throw new Error('还没有加载任何配置：demoModel() 无模型可取');
 }
 
 /* ---------------- 由 MODEL 生成可计算的链 ---------------- */
 let MODEL = null, CHAIN = [], NJ = 0, Q = [], ACTIVE = -1, SHOW_FRAMES = true;
 let CLOUD = [], STATS = {}, CURVEPTS = null;
 
-/* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态（存在 localStorage，不进模型 JSON） ----------------
-   CHASSIS.pos 默认 base 系 (0, 140, 0)；zDir=−1 ⇒ 从中心点往 −Z 长 size[2]
-   ⇒ 中心点就是碰撞箱【上表面中心】，底面中心 = 接地中心 = base (0,140,−105)          */
-let CHASSIS = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
-/* 规则：长宽高 ≤ 1200×1200×1100；直径 1500 的球，球心距接地中心 480 */
-let SIZER   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+/* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态 ----------------
+   ★ 默认值来自配置（CONFIG.chassis），引擎不再自带同济的车体尺寸。
+     没配置时这些对象为空，尺寸校核那块界面会自己让开。
+   CHASSIS.pos 默认 base 系；zDir=−1 ⇒ 从中心点往 −Z 长 size[2]
+   ⇒ 中心点就是碰撞箱【上表面中心】，底面中心 = 接地中心                        */
+let CHASSIS = { posMode:'base', pos:[0,0,0], size:[1,1,1], zDir:-1 };
+let SIZER   = { lwh:[0,0,0], ballD:0, ballH:0 };
 let SHOWBOX = { chassis:true, lwh:true, ball:true };
 let PANEL_REST = '';            // 数据面板里除"底盘/尺寸"段以外的 HTML（改底盘参数时只重画尺寸段）
 
@@ -326,12 +319,15 @@ function warnNoLS(){
   t.insertBefore(s, t.firstChild);
 }
 function cfgObj(){                       // 规则侧设置的快照（模型之外的一切）
-  return { init: RULES.init, swap: MAP.swap, baseH: RULES.baseH,
+  return { init: RULES ? RULES.init : null,
+           taskMap: MAP ? MAP.taskMap : null,      // ★ 任务系映射（原来是布尔 swap）
+           baseH: RULES ? RULES.baseH : null,
            nSample: document.getElementById('selN').value,
            yaw: MODEL ? MODEL.base.yaw : -90,
            chassis: CHASSIS, chassisV: CHASSIS_V,      // ★ 底盘箱（带默认值版本号）
            sizer: SIZER, showbox: SHOWBOX,             // ★ 伸展尺寸 / 显示开关
-           splitPct: SPLIT_PCT };                      // ★ 右栏上下分隔条位置
+           splitPct: SPLIT_PCT,                        // ★ 右栏上下分隔条位置
+           configId: (typeof activeConfigId === 'function') ? activeConfigId() : null };  // ★ 当前配置
 }
 function saveLocal(){
   try{
@@ -349,25 +345,35 @@ function loadCfg(){
   try{
     const s = localStorage.getItem('armBuilderCfg'); if(!s) return;
     const c = JSON.parse(s);
-    if(c.init) Object.assign(RULES.init, c.init);
-    if(typeof c.swap === 'boolean') MAP.swap = c.swap;
-    if(c.baseH) RULES.baseH = c.baseH;
+
+    /* ★ 存档属于哪个配置？不属于当前配置就整段忽略 ——
+       否则拿同济的存档去套新构型，会得到看着正常其实全错的数 */
+    if(c.configId && typeof activeConfigId === 'function' && c.configId !== activeConfigId()){
+      return;
+    }
+    if(c.init && RULES) Object.assign(RULES.init, c.init);
+    if(c.taskMap && MAP) MAP.taskMap = c.taskMap;        // ★ 原 swap:true/false
+    else if(typeof c.swap === 'boolean' && MAP) MAP.taskMap = c.swap ? 'swap' : 'noSwap';
+    if(c.baseH && RULES) RULES.baseH = c.baseH;
     if(c.nSample) document.getElementById('selN').value = c.nSample;
     /* ★ 底盘箱要带版本号：改动 CHASSIS 默认值后，老存档不能把新默认值盖回去 */
     if(c.chassis && c.chassisV === CHASSIS_V) Object.assign(CHASSIS, c.chassis);
     if(c.sizer)   Object.assign(SIZER,   c.sizer);
     if(c.showbox) Object.assign(SHOWBOX, c.showbox);
     if(typeof c.splitPct === 'number'){ SPLIT_PCT = c.splitPct; applySplit(); }
+    /* 映射可能被存档改过 ⇒ 重建换算对象（实现只有一份，见 04-config.js） */
+    if(typeof rebuildTaskMap === 'function' && MAP) rebuildTaskMap();
     syncBoxChecks();
   }catch(e){ warnNoLS(); }
 }
-/* 把当前设置回填到控件上 */
+/* 把当前设置回填到控件上。★ 没有规则/尺寸的配置（rules:null）就跳过对应控件 */
 function syncCfgInputs(){
-  document.getElementById('inCx').value = RULES.init.x;
-  document.getElementById('inCy').value = RULES.init.y;
-  document.getElementById('inCz').value = RULES.init.z;
-  document.getElementById('selMap').value = MAP.swap ? 'swap' : 'side';
-  if(MODEL) document.getElementById('inYaw').value = MODEL.base.yaw;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  if (RULES && RULES.init) {
+    set('inCx', RULES.init.x); set('inCy', RULES.init.y); set('inCz', RULES.init.z);
+  }
+  set('selMap', (MAP && MAP.taskMap === 'noSwap') ? 'side' : 'swap');
+  if (MODEL) set('inYaw', MODEL.base.yaw);
 }
 function setModel(m, save){
   if(!m || !Array.isArray(m.links)){ alert('模型格式不对'); return; }
@@ -520,7 +526,13 @@ document.getElementById('mLast').onclick = () => {
 
 /* 自检钩子：#demo 直接载入示例；#dump 把浏览器算出来的各坐标系数据铺满屏幕（供无头截图核对） */
 window.addEventListener('DOMContentLoaded', () => {
-  loadCfg();                                 // ← 先恢复上次的设置（位置/映射/采样数）
+  /* ★ 先把配置装上 —— 模型 / 规则 / 车体尺寸全部来自配置，引擎不自带 */
+  let cfgId = null;
+  try{ const s = localStorage.getItem('armBuilderCfg'); if(s) cfgId = JSON.parse(s).configId; }catch(e){}
+  applyConfig(cfgId && CONFIGS[cfgId] ? cfgId : DEFAULT_CONFIG_ID);
+  initConfigSelector();
+
+  loadCfg();                                 // 再恢复上次的设置（位置/映射/采样数）
   const last = loadLocal();
   document.getElementById('mLast').style.display = last ? '' : 'none';
   const h = location.hash;

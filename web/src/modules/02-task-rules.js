@@ -1,37 +1,16 @@
 "use strict";
 /* ==================================================================
-   规则手册硬编码区（比赛规则若变，只改这一段）
-   表 5-10 科技核心位姿范围；坐标系 OXYZ 的原点 O 在【战场地面】上，
-   而机械臂 base 坐标系装在底盘上（z +170mm），换算时必须减掉。
+   任务域校核（规则相关）
+
+   ★ 这里【不再】写死比赛规则 —— 规则、装配位、坐标系换算全部来自配置
+     （web/src/configs/*.js），由 04-config.js 的 applyConfig() 填进
+     RULES / MAP。换一套比赛规则 = 加一个配置文件，不用改这个模块。
+
+     没有配置规则时（rules:null），RULES / MAP 为 null，
+     任务域那块界面会自己让开，可达集等通用功能照常可用。
    ================================================================== */
-const RULES = {
-  src   : '规则手册 表5-10（x,y,z 单位 mm，角度 °）',
-  baseH : 170,            // 车停在 OXYZ：base 原点 = (0,0,170)_OXYZ，Z 方向相同
-  /* base 系与 OXYZ 的轴向映射（你给的）：
-       base.X = -OXYZ.Y      base.Y = +OXYZ.X      base.Z = +OXYZ.Z
-     （右手系自洽；即绕 OXYZ.Z 转 +90°） */
-  init  : {x:-500, y:-200, z:800, th:0, ph:90, al:0},   // 装配臂(科技核心)位置，OXYZ 下
-  levels: {
-    1: {name:'一级', x:[-100,0], y:[100,300], z:[500,700], th:[0,0],    ph:[90,90], al:[0,0],
-        note:'无平移、无旋转要求'},
-    2: {name:'二级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
-        note:'放入后沿 z 平移 100mm，无旋转要求'},
-    3: {name:'三级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
-        note:'放入后沿 z 平移 100mm；再以 P 轴为旋转轴旋转'},
-  },
-  /* 装配动作约定（按你的口述写死）
-     - 夹爪是连杆机构：沿自身 x 轴移动夹紧
-     - 插入：沿 ±y 把 Q 轴送进科技核心口（初始位形 e⃗∥+X_OXYZ∥base.Y）
-     - 夹爪姿态：Q 轴正对着的是夹爪的 Z-，即 夹爪自身 z = -e⃗
-     - P 轴 = 核心坐标系的 Y′；Q 轴 = X′（= e⃗） */
-  act: {
-    gripAxis  : 'x',
-    insertAxis: 'y',
-    Qaxis     : 'X′ ( = e⃗ )',
-    Paxis     : 'Y′',
-    eeZalign  : '-e⃗',
-  }
-};
+let RULES = null;    // 由配置层填：{ src, frame, init, levels, act, baseH }
+let MAP   = null;    // 由配置层填：任务系 <-> base 系换算（唯一实现见 04-config.js）
 
 /* ---------------- 小工具 ---------------- */
 let VOX = null;                                   // 可达集体素集合
@@ -47,18 +26,13 @@ function solve3(A,b){                              // 3x3 线性方程组
     return det3(M)/d; });
   return col;
 }
-/* OXYZ（地面系） <-> base 系。两种映射可在界面上切换：
-   A(swap=true, 默认)：base.X = -OXYZ.X、base.Y = -OXYZ.Y、base.Z = OXYZ.Z-170
-        ⇒ 零点 e⃗(=+OXYZ.X) 映射到 base 的 -X。配 base yaw=-90（臂朝 +X）
-          正好让"臂朝 +X、Q 轴朝 -X"，互为反向 ⇒ 正面装配 ✓
-   B(swap=false)：base.X = -OXYZ.Y、base.Y = +OXYZ.X（右手系自洽，绕 Z +90°） */
-const MAP = { swap: true };
-const taskToBase = p => MAP.swap ? [-p[0], -p[1], p[2]-RULES.baseH]
-                                 : [-p[1],  p[0], p[2]-RULES.baseH];
-const baseToTask = p => MAP.swap ? [-p[0], -p[1], p[2]+RULES.baseH]
-                                 : [ p[1], -p[0], p[2]+RULES.baseH];
-const dirToBase  = d => MAP.swap ? [-d[0], -d[1], d[2]]
-                                 : [-d[1],  d[0], d[2]];
+/* OXYZ（地面系） <-> base 系。
+   ★ 实现已统一到 04-config.js 的 mapObj()，这里只做转发 —— 不许再写第二份。
+     界面上"映射"下拉框改的是 CONFIG.rules.frame.taskMap，再 rebuildTaskMap()。
+     两边共用一份公式，MATLAB 侧就不会再差 90°（t7 那个假的 0/200 可解）。 */
+const taskToBase = p => MAP.toBase(p);
+const baseToTask = p => MAP.toTask(p);
+const dirToBase  = d => MAP.dirToBase(d);
 
 /* ---------------- 科技核心位姿 → 空间姿态 ---------------- */
 /* e⃗（= 装配柱前表面法向 = Q 轴方向）由球坐标 (θ,φ) 给出，定义在 OXYZ 下；
@@ -637,9 +611,13 @@ document.getElementById('inYaw').onchange = e => {
     updateAll(); saveLocal();
   };
 });
-/* 映射切换：核心在"前方"还是"侧面" */
+/* 映射切换：核心在"前方"还是"侧面"
+   ★ 改的是配置里的 frame.taskMap，然后按同一份实现重建换算对象。
+     换算公式只有 04-config.js 的 mapObj() 一处，不再各写一份。 */
 document.getElementById('selMap').onchange = e => {
-  MAP.swap = (e.target.value === 'swap');
+  if (!CONFIG || !CONFIG.rules) return;                 // 该配置没有规则，忽略
+  CONFIG.rules.frame.taskMap = (e.target.value === 'swap') ? 'swap' : 'noSwap';
+  rebuildTaskMap();
   updateAll(); saveLocal();
 };
 /* 若用户从开始窗口选了"示例"，把规则侧设置也存下来（但不覆盖已有模型） */

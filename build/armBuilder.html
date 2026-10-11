@@ -113,6 +113,9 @@
     <div><div id="title">机械臂可行性集 · 建模器</div><div id="model"></div></div>
     <div class="chips" id="chips"></div>
     <div id="tools">
+      <label class="k">配置
+        <select id="selConfig" title="构型 = 臂型 + 规则 + 车体尺寸；在 web/src/configs/ 里加文件即可扩充"></select>
+      </label>
       <label class="k">装配臂位置
         <input type="number" id="inCx" step="10" value="-200" style="width:64px">
         <input type="number" id="inCy" step="10" value="-200" style="width:64px">
@@ -237,36 +240,29 @@ function rotZdeg(d){ const a=d*D2R,c=Math.cos(a),s=Math.sin(a);
   return [[c,-s,0],[s,c,0],[0,0,1]]; }
 
 /* ---------------- 示例模型（= 同济臂，7 段） ---------------- */
+/* ---------------- 示例 / 默认臂型 ----------------
+   ★ 这里【不再】写死同济臂的杆长与限位 —— 它已搬到 web/src/configs/tongji.js。
+     demoModel() 保留为兼容入口：读当前配置里的模型。
+     （历史上这里是第二份臂型定义，和 MATLAB 的 armSpec.m 各写一份，
+       改一处忘一处是常态。现在两边都以配置文件为准。） */
 function demoModel(){
-  const L = (name,joint,type,pos,axes,axis,limits)=>
-      ({name,joint,type,posMode:'parent',pos,axes,axis,limits});
-  const ID = {x:'+X',y:'+Y',z:'+Z'};
-  return { name:'同济工程机械臂（示例）',
-    // ★ base yaw = -90：把臂的"前方"(本体 +Y)转到 +X。
-    //   配合 MAP.swap=true（Q 轴映射到 -X），零位时 末端 z(+X) 与 Q轴(-X) 正好相对
-    //   ⇒ 正面装配，解算不会出现"绕到反面"的抽象行为（见数据面板"零位朝向校核"）
-    base:{xyz:[0,0,0], yaw:-90}, links:[
-    {name:'base_link', joint:'base_joint', type:'revolute', posMode:'origin', pos:[0,0,0],
-     axes:ID, axis:'+Z', limits:null},
-    L('link1','joint1','revolute',[0,0,75],      ID,                    '+X', [0,122]),
-    L('link2','joint2','revolute',[0,290,0],     ID,                    '-X', [-90,200]),
-    L('link3','joint3','revolute',[85.5,0,0],    ID,                    '+Z', null),
-    L('link4','joint4','revolute',[0,-30,401.47],ID,                    '+X', [-16,220]),
-    L('link5','joint5','revolute',[0,0,0],       {x:'+X',y:'-Z',z:'+Y'},'+Z', null),
-    L('gripper','gripper_fix','fixed',[0,0,211], ID,                    '+Z', null)
-  ]};
+  if (MODEL) return JSON.parse(JSON.stringify(MODEL));
+  if (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.model)
+    return JSON.parse(JSON.stringify(CONFIG.model));
+  throw new Error('还没有加载任何配置：demoModel() 无模型可取');
 }
 
 /* ---------------- 由 MODEL 生成可计算的链 ---------------- */
 let MODEL = null, CHAIN = [], NJ = 0, Q = [], ACTIVE = -1, SHOW_FRAMES = true;
 let CLOUD = [], STATS = {}, CURVEPTS = null;
 
-/* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态（存在 localStorage，不进模型 JSON） ----------------
-   CHASSIS.pos 默认 base 系 (0, 140, 0)；zDir=−1 ⇒ 从中心点往 −Z 长 size[2]
-   ⇒ 中心点就是碰撞箱【上表面中心】，底面中心 = 接地中心 = base (0,140,−105)          */
-let CHASSIS = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
-/* 规则：长宽高 ≤ 1200×1200×1100；直径 1500 的球，球心距接地中心 480 */
-let SIZER   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+/* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态 ----------------
+   ★ 默认值来自配置（CONFIG.chassis），引擎不再自带同济的车体尺寸。
+     没配置时这些对象为空，尺寸校核那块界面会自己让开。
+   CHASSIS.pos 默认 base 系；zDir=−1 ⇒ 从中心点往 −Z 长 size[2]
+   ⇒ 中心点就是碰撞箱【上表面中心】，底面中心 = 接地中心                        */
+let CHASSIS = { posMode:'base', pos:[0,0,0], size:[1,1,1], zDir:-1 };
+let SIZER   = { lwh:[0,0,0], ballD:0, ballH:0 };
 let SHOWBOX = { chassis:true, lwh:true, ball:true };
 let PANEL_REST = '';            // 数据面板里除"底盘/尺寸"段以外的 HTML（改底盘参数时只重画尺寸段）
 
@@ -530,12 +526,15 @@ function warnNoLS(){
   t.insertBefore(s, t.firstChild);
 }
 function cfgObj(){                       // 规则侧设置的快照（模型之外的一切）
-  return { init: RULES.init, swap: MAP.swap, baseH: RULES.baseH,
+  return { init: RULES ? RULES.init : null,
+           taskMap: MAP ? MAP.taskMap : null,      // ★ 任务系映射（原来是布尔 swap）
+           baseH: RULES ? RULES.baseH : null,
            nSample: document.getElementById('selN').value,
            yaw: MODEL ? MODEL.base.yaw : -90,
            chassis: CHASSIS, chassisV: CHASSIS_V,      // ★ 底盘箱（带默认值版本号）
            sizer: SIZER, showbox: SHOWBOX,             // ★ 伸展尺寸 / 显示开关
-           splitPct: SPLIT_PCT };                      // ★ 右栏上下分隔条位置
+           splitPct: SPLIT_PCT,                        // ★ 右栏上下分隔条位置
+           configId: (typeof activeConfigId === 'function') ? activeConfigId() : null };  // ★ 当前配置
 }
 function saveLocal(){
   try{
@@ -553,25 +552,35 @@ function loadCfg(){
   try{
     const s = localStorage.getItem('armBuilderCfg'); if(!s) return;
     const c = JSON.parse(s);
-    if(c.init) Object.assign(RULES.init, c.init);
-    if(typeof c.swap === 'boolean') MAP.swap = c.swap;
-    if(c.baseH) RULES.baseH = c.baseH;
+
+    /* ★ 存档属于哪个配置？不属于当前配置就整段忽略 ——
+       否则拿同济的存档去套新构型，会得到看着正常其实全错的数 */
+    if(c.configId && typeof activeConfigId === 'function' && c.configId !== activeConfigId()){
+      return;
+    }
+    if(c.init && RULES) Object.assign(RULES.init, c.init);
+    if(c.taskMap && MAP) MAP.taskMap = c.taskMap;        // ★ 原 swap:true/false
+    else if(typeof c.swap === 'boolean' && MAP) MAP.taskMap = c.swap ? 'swap' : 'noSwap';
+    if(c.baseH && RULES) RULES.baseH = c.baseH;
     if(c.nSample) document.getElementById('selN').value = c.nSample;
     /* ★ 底盘箱要带版本号：改动 CHASSIS 默认值后，老存档不能把新默认值盖回去 */
     if(c.chassis && c.chassisV === CHASSIS_V) Object.assign(CHASSIS, c.chassis);
     if(c.sizer)   Object.assign(SIZER,   c.sizer);
     if(c.showbox) Object.assign(SHOWBOX, c.showbox);
     if(typeof c.splitPct === 'number'){ SPLIT_PCT = c.splitPct; applySplit(); }
+    /* 映射可能被存档改过 ⇒ 重建换算对象（实现只有一份，见 04-config.js） */
+    if(typeof rebuildTaskMap === 'function' && MAP) rebuildTaskMap();
     syncBoxChecks();
   }catch(e){ warnNoLS(); }
 }
-/* 把当前设置回填到控件上 */
+/* 把当前设置回填到控件上。★ 没有规则/尺寸的配置（rules:null）就跳过对应控件 */
 function syncCfgInputs(){
-  document.getElementById('inCx').value = RULES.init.x;
-  document.getElementById('inCy').value = RULES.init.y;
-  document.getElementById('inCz').value = RULES.init.z;
-  document.getElementById('selMap').value = MAP.swap ? 'swap' : 'side';
-  if(MODEL) document.getElementById('inYaw').value = MODEL.base.yaw;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  if (RULES && RULES.init) {
+    set('inCx', RULES.init.x); set('inCy', RULES.init.y); set('inCz', RULES.init.z);
+  }
+  set('selMap', (MAP && MAP.taskMap === 'noSwap') ? 'side' : 'swap');
+  if (MODEL) set('inYaw', MODEL.base.yaw);
 }
 function setModel(m, save){
   if(!m || !Array.isArray(m.links)){ alert('模型格式不对'); return; }
@@ -724,7 +733,13 @@ document.getElementById('mLast').onclick = () => {
 
 /* 自检钩子：#demo 直接载入示例；#dump 把浏览器算出来的各坐标系数据铺满屏幕（供无头截图核对） */
 window.addEventListener('DOMContentLoaded', () => {
-  loadCfg();                                 // ← 先恢复上次的设置（位置/映射/采样数）
+  /* ★ 先把配置装上 —— 模型 / 规则 / 车体尺寸全部来自配置，引擎不自带 */
+  let cfgId = null;
+  try{ const s = localStorage.getItem('armBuilderCfg'); if(s) cfgId = JSON.parse(s).configId; }catch(e){}
+  applyConfig(cfgId && CONFIGS[cfgId] ? cfgId : DEFAULT_CONFIG_ID);
+  initConfigSelector();
+
+  loadCfg();                                 // 再恢复上次的设置（位置/映射/采样数）
   const last = loadLocal();
   document.getElementById('mLast').style.display = last ? '' : 'none';
   const h = location.hash;
@@ -758,38 +773,17 @@ function doDump(){
 <script>
 "use strict";
 /* ==================================================================
-   规则手册硬编码区（比赛规则若变，只改这一段）
-   表 5-10 科技核心位姿范围；坐标系 OXYZ 的原点 O 在【战场地面】上，
-   而机械臂 base 坐标系装在底盘上（z +170mm），换算时必须减掉。
+   任务域校核（规则相关）
+
+   ★ 这里【不再】写死比赛规则 —— 规则、装配位、坐标系换算全部来自配置
+     （web/src/configs/*.js），由 04-config.js 的 applyConfig() 填进
+     RULES / MAP。换一套比赛规则 = 加一个配置文件，不用改这个模块。
+
+     没有配置规则时（rules:null），RULES / MAP 为 null，
+     任务域那块界面会自己让开，可达集等通用功能照常可用。
    ================================================================== */
-const RULES = {
-  src   : '规则手册 表5-10（x,y,z 单位 mm，角度 °）',
-  baseH : 170,            // 车停在 OXYZ：base 原点 = (0,0,170)_OXYZ，Z 方向相同
-  /* base 系与 OXYZ 的轴向映射（你给的）：
-       base.X = -OXYZ.Y      base.Y = +OXYZ.X      base.Z = +OXYZ.Z
-     （右手系自洽；即绕 OXYZ.Z 转 +90°） */
-  init  : {x:-500, y:-200, z:800, th:0, ph:90, al:0},   // 装配臂(科技核心)位置，OXYZ 下
-  levels: {
-    1: {name:'一级', x:[-100,0], y:[100,300], z:[500,700], th:[0,0],    ph:[90,90], al:[0,0],
-        note:'无平移、无旋转要求'},
-    2: {name:'二级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
-        note:'放入后沿 z 平移 100mm，无旋转要求'},
-    3: {name:'三级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
-        note:'放入后沿 z 平移 100mm；再以 P 轴为旋转轴旋转'},
-  },
-  /* 装配动作约定（按你的口述写死）
-     - 夹爪是连杆机构：沿自身 x 轴移动夹紧
-     - 插入：沿 ±y 把 Q 轴送进科技核心口（初始位形 e⃗∥+X_OXYZ∥base.Y）
-     - 夹爪姿态：Q 轴正对着的是夹爪的 Z-，即 夹爪自身 z = -e⃗
-     - P 轴 = 核心坐标系的 Y′；Q 轴 = X′（= e⃗） */
-  act: {
-    gripAxis  : 'x',
-    insertAxis: 'y',
-    Qaxis     : 'X′ ( = e⃗ )',
-    Paxis     : 'Y′',
-    eeZalign  : '-e⃗',
-  }
-};
+let RULES = null;    // 由配置层填：{ src, frame, init, levels, act, baseH }
+let MAP   = null;    // 由配置层填：任务系 <-> base 系换算（唯一实现见 04-config.js）
 
 /* ---------------- 小工具 ---------------- */
 let VOX = null;                                   // 可达集体素集合
@@ -805,18 +799,13 @@ function solve3(A,b){                              // 3x3 线性方程组
     return det3(M)/d; });
   return col;
 }
-/* OXYZ（地面系） <-> base 系。两种映射可在界面上切换：
-   A(swap=true, 默认)：base.X = -OXYZ.X、base.Y = -OXYZ.Y、base.Z = OXYZ.Z-170
-        ⇒ 零点 e⃗(=+OXYZ.X) 映射到 base 的 -X。配 base yaw=-90（臂朝 +X）
-          正好让"臂朝 +X、Q 轴朝 -X"，互为反向 ⇒ 正面装配 ✓
-   B(swap=false)：base.X = -OXYZ.Y、base.Y = +OXYZ.X（右手系自洽，绕 Z +90°） */
-const MAP = { swap: true };
-const taskToBase = p => MAP.swap ? [-p[0], -p[1], p[2]-RULES.baseH]
-                                 : [-p[1],  p[0], p[2]-RULES.baseH];
-const baseToTask = p => MAP.swap ? [-p[0], -p[1], p[2]+RULES.baseH]
-                                 : [ p[1], -p[0], p[2]+RULES.baseH];
-const dirToBase  = d => MAP.swap ? [-d[0], -d[1], d[2]]
-                                 : [-d[1],  d[0], d[2]];
+/* OXYZ（地面系） <-> base 系。
+   ★ 实现已统一到 04-config.js 的 mapObj()，这里只做转发 —— 不许再写第二份。
+     界面上"映射"下拉框改的是 CONFIG.rules.frame.taskMap，再 rebuildTaskMap()。
+     两边共用一份公式，MATLAB 侧就不会再差 90°（t7 那个假的 0/200 可解）。 */
+const taskToBase = p => MAP.toBase(p);
+const baseToTask = p => MAP.toTask(p);
+const dirToBase  = d => MAP.dirToBase(d);
 
 /* ---------------- 科技核心位姿 → 空间姿态 ---------------- */
 /* e⃗（= 装配柱前表面法向 = Q 轴方向）由球坐标 (θ,φ) 给出，定义在 OXYZ 下；
@@ -1395,9 +1384,13 @@ document.getElementById('inYaw').onchange = e => {
     updateAll(); saveLocal();
   };
 });
-/* 映射切换：核心在"前方"还是"侧面" */
+/* 映射切换：核心在"前方"还是"侧面"
+   ★ 改的是配置里的 frame.taskMap，然后按同一份实现重建换算对象。
+     换算公式只有 04-config.js 的 mapObj() 一处，不再各写一份。 */
 document.getElementById('selMap').onchange = e => {
-  MAP.swap = (e.target.value === 'swap');
+  if (!CONFIG || !CONFIG.rules) return;                 // 该配置没有规则，忽略
+  CONFIG.rules.frame.taskMap = (e.target.value === 'swap') ? 'swap' : 'noSwap';
+  rebuildTaskMap();
   updateAll(); saveLocal();
 };
 /* 若用户从开始窗口选了"示例"，把规则侧设置也存下来（但不覆盖已有模型） */
@@ -1426,10 +1419,14 @@ document.getElementById('mDemo').addEventListener('click', () => {
       ★ 刻意【不】报"当前位形/可达集的长宽高包围盒"：模型里没有杆件的碰撞体，
         而且臂的 yaw 限位还没加（模型上能转到车背面），拿骨架去量长宽高只会得出假数。
    ================================================================== */
-const CHASSIS_V   = 2;                 // ★ 改动 CHASSIS 默认值时必须 +1，
-                                       //   否则老存档（localStorage）会把新默认值盖回去
-const CHASSIS_DEF = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
-const SIZER_DEF   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+/* ★ 车体尺寸规则来自配置（configs/*.js 的 chassis 段），引擎不再自带同济的数。
+   CHASSIS_V 由配置给（改配置里的默认值时要 +1，否则老存档会把新默认值盖回去）。
+   "恢复默认"取的是【当前配置】的默认值。 */
+let CHASSIS_V = 2;
+const chassisDefault = () => (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.chassis)
+  ? CONFIG.chassis.chassis : { posMode:'base', pos:[0,0,0], size:[1,1,1], zDir:-1 };
+const sizerDefault   = () => (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.chassis)
+  ? CONFIG.chassis.sizer   : { lwh:[0,0,0], ballD:0, ballH:0 };
 const C_CHASSIS = '#ffd400', C_LWH = '#00e5c0', C_BALL = '#a78bfa';
 const F_SM = "11px system-ui,'Microsoft YaHei'";
 const F_BD = "bold 11px system-ui,'Microsoft YaHei'";
@@ -1733,8 +1730,8 @@ function openChassisForm(force){
   f.onchange = applyChassisForm;               // 事件委托：任一控件 change 即应用（不必滚到底找按钮）
   document.getElementById('cClose').onclick = () => { f.className = ''; };
   document.getElementById('cReset').onclick = () => {
-    Object.assign(CHASSIS, JSON.parse(JSON.stringify(CHASSIS_DEF)));
-    Object.assign(SIZER,   JSON.parse(JSON.stringify(SIZER_DEF)));
+    Object.assign(CHASSIS, JSON.parse(JSON.stringify(chassisDefault())));
+    Object.assign(SIZER,   JSON.parse(JSON.stringify(sizerDefault())));
     openChassisForm(true);                       // 重画表单 ⇒ 输入框回到默认值
     applyChassisForm();
   };
@@ -1841,6 +1838,345 @@ window.SIZEINFO = function(){
           segs:A.segs, armLen:A.total, reach:A.reach, zMin:A.zMin, zMax:A.zMax,
           cloudN:A.n, showbox:{chassis:SHOWBOX.chassis, lwh:SHOWBOX.lwh, ball:SHOWBOX.ball}};
 };
+</script>
+
+<!-- ==================================================================
+     配置层：把「具体是哪条臂 / 哪套规则 / 车体尺寸」从引擎里搬出来放这里。
+     引擎只认 CONFIG。加一个新构型 = 在 web/src/configs/ 加一个 .js
+     并在 index.txt 里登记一行，不用动引擎。
+     ================================================================== -->
+<script>
+/* ==================================================================
+   04-config.js —— 配置层（引擎与"具体哪条臂 / 哪套规则"之间的唯一接口）
+
+   为什么要有这一层：
+    这个仓库长期只有一条臂（同济示例臂）。杆长、比赛规则、车体尺寸
+    全散在 01/02/03 三个模块里写死，于是：
+      · 换一条臂来算，规则还是同济的，算出来的数没有意义
+      · 想加新构型只能改引擎 → 很容易把原来那条臂弄坏
+    所以把「具体是哪条臂 / 哪套规则」全部搬到配置里，引擎只认 CONFIG。
+
+   一个配置长这样：
+
+     defineConfig('tongji', {
+       label:   '同济工程机械臂（示例）',
+       model:   { name, base:{xyz,yaw}, links:[...] },     // 臂本身
+       rules:   { frame:{...}, levels:{...}, ... } | null,  // 竞赛规则（可缺省）
+       chassis: { posMode,pos,size,zDir, lwh, ballD,ballH } | null,  // 车体尺寸
+       taskMap: 'auto' | fn                                 // 任务域 <-> base 的换算
+     });
+
+   ★ 关键：任务域换算不再手写，而是【从 model.base.yaw 推出来】。
+     手写就是 t7 那个 bug 的来源（网页用 base 系、MATLAB 用另一套，差了 90°）。
+==================================================================================== */
+'use strict';
+
+/* CONFIGS / CONFIG 是本模块自己的；RULES / MAP / MODEL / CHASSIS / SIZER
+   的可变声明在 01 与 02 里（它们先加载）。这里【不重复声明】，
+   否则同一个 <script> 作用域里 let 重名会直接 SyntaxError。 */
+let CONFIG = null;                 // 当前生效的配置
+let APPLIED_CONFIG_ID = null;      // 已 apply 的配置 id
+const CONFIGS = {};                // id -> 配置
+let CONFIG_ORDER = [];
+let DEFAULT_CONFIG_ID = 'tongji';  // 默认配置（configs/*.js 可覆盖）
+
+function defineConfig(id, cfg) {
+  cfg.id = id;
+  CONFIGS[id] = cfg;
+  if (!CONFIG_ORDER.includes(id)) CONFIG_ORDER.push(id);
+  return cfg;
+}
+function listConfigs() { return CONFIG_ORDER.slice(); }
+function activeConfigId() { return APPLIED_CONFIG_ID; }
+
+/* ---------------- 任务域 <-> base 的换算 ----------------
+   这是【唯一】实现，引擎与 MATLAB 都必须用它，不许再各写一份
+   （t7 那个"0/200 可解"就是各写一份造成的）。
+
+   frame = { yaw, baseH, taskMap }
+     yaw     : 臂本体装车上的朝向（应等于 model.base.yaw）
+     baseH   : base 原点离任务系地面的高度 mm
+     taskMap : 任务系 → 整车系的轴向约定
+               'swap'   : base.X = -OXYZ.X, base.Y = -OXYZ.Y
+               'noSwap' : base.X = -OXYZ.Y, base.Y = +OXYZ.X
+
+   两个映射【不是】两个 yaw 角度 —— 它们是两套轴向约定。
+   实现上都在 xy 平面内，所以统一写成 Rz(φ) + 抬升，φ 由 taskMap 决定：
+     'swap' → φ = 180°     'noSwap' → φ = 90°
+   取逆时用 Rz(−φ)。                                          */
+const TASKMAP_PHI = { swap: 180, noSwap: 90 };
+
+function mapObj(frame) {
+  frame = frame || {};
+  const h = +frame.baseH || 0;
+  const kind = frame.taskMap === 'noSwap' ? 'noSwap' : 'swap';
+  const phi = TASKMAP_PHI[kind] * D2R;
+  const c = Math.cos(phi), s = Math.sin(phi);
+
+  /* base = Rz(φ)·(OXYZ − [0,0,baseH]) ；反变换 Rz(−φ) 再抬回去 */
+  const fwd = v => [c * v[0] - s * v[1], s * v[0] + c * v[1], v[2]];
+  const inv = v => [c * v[0] + s * v[1], -s * v[0] + c * v[1], v[2]];
+
+  return {
+    yaw: +frame.yaw || 0, baseH: h, taskMap: kind, phiDeg: TASKMAP_PHI[kind],
+    toBase: p => { const q = fwd([p[0], p[1], p[2] - h]); return [q[0], q[1], q[2]]; },
+    toTask: p => { const q = inv(p); return [q[0], q[1], q[2] + h]; },
+    dirToBase: d => fwd(d),
+    dirToTask: d => inv(d),
+    describe: () => kind + ' (Rz(' + TASKMAP_PHI[kind] + '°), 抬高 ' + h + 'mm)'
+  };
+}
+
+/* 重新按当前 frame 造一个 taskMap 对象（改映射后调，不重新 apply 整个配置） */
+function rebuildTaskMap() {
+  if (!CONFIG || !CONFIG.rules) return null;
+  MAP = mapObj(CONFIG.rules.frame);
+  return MAP;
+}
+
+/* ---------------- 应用一个配置 ---------------- */
+function applyConfig(id) {
+  const cfg = CONFIGS[id];
+  if (!cfg) throw new Error('没有这个配置：' + id);
+  CONFIG = cfg;
+  APPLIED_CONFIG_ID = id;
+
+  /* 1) 臂型 → MODEL（引擎只从这里拿模型，不再自带示例臂） */
+  if (cfg.model) {
+    MODEL = JSON.parse(JSON.stringify(cfg.model));
+  }
+  /* 安装朝向以 rules.frame.yaw 为准（两者本来就该是同一个量，写两处容易走偏） */
+  if (MODEL && cfg.rules && cfg.rules.frame && typeof cfg.rules.frame.yaw === 'number') {
+    MODEL.base.yaw = cfg.rules.frame.yaw;
+  }
+  if (MODEL) buildChain();
+
+  /* 2) 竞赛规则 */
+  if (cfg.rules) {
+    RULES = JSON.parse(JSON.stringify(cfg.rules));
+    if (RULES.frame) {
+      RULES.baseH = RULES.frame.baseH;
+      MAP = mapObj(RULES.frame);
+    } else {
+      MAP = null;
+    }
+  } else {
+    RULES = null;          // 没有规则：任务域那块界面自己会隐藏/提示
+    MAP = null;
+  }
+
+  /* 3) 车体 / 尺寸规则。没配就回到"空"（尺寸校核那块会自己让开） */
+  if (cfg.chassis) {
+    const c = cfg.chassis;
+    CHASSIS   = JSON.parse(JSON.stringify(c.chassis || {}));
+    SIZER     = JSON.parse(JSON.stringify(c.sizer || {}));
+    CHASSIS_V = (c.v === undefined ? CHASSIS_V : c.v);
+  } else {
+    CHASSIS = { posMode:'base', pos:[0,0,0], size:[1,1,1], zDir:-1 };
+    SIZER   = { lwh:[0,0,0], ballD:0, ballH:0 };
+  }
+
+  /* 4) 按配置刷新能刷的界面（引擎不认识的控件就不动） */
+  syncConfigUI();
+  return cfg;
+}
+
+/* 配置切换后把界面同步一下。找不到的控件直接跳过 —— 配置可以不带规则/车体。 */
+function syncConfigUI() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const txt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  if (MODEL) txt('model', MODEL.name + '（' + MODEL.links.length + ' 段，' +
+                         '安装 yaw ' + (MODEL.base && MODEL.base.yaw) + '°）');
+  set('selMap', (MAP && MAP.taskMap === 'noSwap') ? 'side' : 'swap');
+
+  const sel = document.getElementById('selConfig');
+  if (sel) {
+    sel.innerHTML = listConfigs()
+      .map(cid => '<option value="' + cid + '"' + (cid === activeConfigId() ? ' selected' : '') +
+                  '>' + (CONFIGS[cid].label || cid) + '</option>').join('');
+  }
+  /* 没有竞赛规则时，把依赖规则的面板标出来 */
+  const noRule = document.getElementById('noRuleWarn');
+  if (noRule) noRule.style.display = (RULES && RULES.levels) ? 'none' : '';
+}
+
+/* 把可选配置列表填进下拉框（DOM 就绪后调） */
+function initConfigSelector() {
+  const sel = document.getElementById('selConfig');
+  if (!sel) return;
+  sel.innerHTML = listConfigs()
+    .map(cid => '<option value="' + cid + '"' + (cid === activeConfigId() ? ' selected' : '') +
+                '>' + (CONFIGS[cid].label || cid) + '</option>').join('');
+  sel.onchange = () => {
+    if (!confirm('切换到「' + CONFIGS[sel.value].label + '」？当前模型会被替换')) {
+      sel.value = activeConfigId(); return;
+    }
+    applyConfig(sel.value);
+    updateAll();
+  };
+}
+
+/* 取某个配置里的臂型（深拷贝）。
+   注意与 demoModel() 的区别：
+     configModel('tongji')  → 配置里【原始】的同济臂，永远不变
+     demoModel()            → 【当前】模型（点"示例"按钮时用来把当前模型重置回配置）
+   要拿"那条示例臂本身"（导出、对表、回归）一律用这个。 */
+function configModel(id) {
+  const cfg = CONFIGS[id || DEFAULT_CONFIG_ID];
+  if (!cfg || !cfg.model) return null;
+  return JSON.parse(JSON.stringify(cfg.model));
+}
+
+/* ---------------- 启动时把默认配置装上 ----------------
+   由 05-bootstrap.js 在所有模块与配置文件都加载完之后调用。
+   ★ 必须放在最后：applyConfig 会用到 MODEL/RULES/MAP/CHASSIS/SIZER，
+     而它们的声明在前面几个模块里（同一个 <script> 作用域，TDZ）。 */
+function initDefaultConfig() {
+  const ids = listConfigs();
+  if (!ids.length) throw new Error('没有任何配置：web/src/configs/ 是不是空了？');
+  const id = ids.includes(DEFAULT_CONFIG_ID) ? DEFAULT_CONFIG_ID : ids[0];
+  applyConfig(id);
+  return id;
+}
+
+/* ==================================================================
+   配置：同济工程机械臂（示例）
+   ------------------------------------------------------------------
+   这个文件里的每一个数字都来自原来的 01/02/03 三个模块，是【原样搬过来的】，
+   没有改过任何值 —— 搬完之后引擎里就不该再有这些数了。
+   ==================================================================================== */
+defineConfig('tongji', {
+  label: '同济工程机械臂（示例）',
+
+  /* ---------------- 臂本身 ----------------
+     与 demoModel() 逐字一致：7 段，安装 yaw = -90（把本体 +Y 转到整车 +X） */
+  model: {
+    name: '同济工程机械臂（示例）',
+    base: { xyz: [0, 0, 0], yaw: -90 },
+    links: [
+      { name: 'base_link', joint: 'base_joint', type: 'revolute', posMode: 'origin',
+        pos: [0, 0, 0], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+Z', limits: null },
+
+      { name: 'link1', joint: 'joint1', type: 'revolute', posMode: 'parent',
+        pos: [0, 0, 75], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+X', limits: [0, 122] },
+
+      { name: 'link2', joint: 'joint2', type: 'revolute', posMode: 'parent',
+        pos: [0, 290, 0], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '-X', limits: [-90, 200] },
+
+      { name: 'link3', joint: 'joint3', type: 'revolute', posMode: 'parent',
+        pos: [85.5, 0, 0], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+Z', limits: null },
+
+      { name: 'link4', joint: 'joint4', type: 'revolute', posMode: 'parent',
+        pos: [0, -30, 401.47], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+X', limits: [-16, 220] },
+
+      { name: 'link5', joint: 'joint5', type: 'revolute', posMode: 'parent',
+        pos: [0, 0, 0], axes: { x: '+X', y: '-Z', z: '+Y' }, axis: '+Z', limits: null },
+
+      { name: 'gripper', joint: 'gripper_fix', type: 'fixed', posMode: 'parent',
+        pos: [0, 0, 211], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+Z', limits: null }
+    ]
+  },
+
+  /* ---------------- 竞赛规则（规则手册 表 5-10）----------------
+     frame 描述【整车系 OXYZ】与【臂 base 系】的关系。三件事分开写，别混：
+
+       yaw    : 臂本体装在车上的朝向（= model.base.yaw，buildChain 用的那个）
+       baseH  : base 原点离任务系地面的高度（mm）
+       taskMap: 任务系 OXYZ 相对整车系的三轴对应关系
+                'swap'    : base.X = -OXYZ.X, base.Y = -OXYZ.Y  （绕 Z 180°）
+                'noSwap'  : base.X = -OXYZ.Y, base.Y = +OXYZ.X  （绕 Z +90°）
+
+     ★ 这三件事以前是【手写死】在 02 模块里的，而 MATLAB 的 t7 又自己写了一
+       另一套，结果两边差 90°，t7 报出假的"0/200 可解"。
+       现在引擎从这三个字段算出换算，MATLAB 侧照抄同一公式即可。
+       见 docs/notes/base_yaw决策待定.md
+
+     ⚠ 注意 yaw 与 taskMap 是【两个独立的东西】，别以为改一个另一个会跟着变：
+       当前 yaw=-90 而 taskMap='swap'（等效绕 Z 180°），两者并不相等。
+       这不是笔误 —— 是历史上就这么定的，保持原样以免改动已有结论。 */
+  rules: {
+    src: '规则手册 表5-10（x,y,z 单位 mm，角度 °）',
+    frame: { yaw: -90, baseH: 170, taskMap: 'swap' },
+    init: { x: -500, y: -200, z: 800, th: 0, ph: 90, al: 0 },   // 装配臂位置（OXYZ 下）
+    levels: {
+      1: { name: '一级', x: [-100, 0], y: [100, 300], z: [500, 700], th: [0, 0],    ph: [90, 90], al: [0, 0],
+           note: '无平移、无旋转要求' },
+      2: { name: '二级', x: [-100, 0], y: [100, 300], z: [500, 700], th: [-90, 90], ph: [0, 90],  al: [-45, 45],
+           note: '放入后沿 z 平移 100mm，无旋转要求' },
+      3: { name: '三级', x: [-100, 0], y: [100, 300], z: [500, 700], th: [-90, 90], ph: [0, 90],  al: [-45, 45],
+           note: '放入后沿 z 平移 100mm；再以 P 轴为旋转轴旋转' }
+    },
+    /* 装配动作约定 */
+    act: {
+      gripAxis: 'x',
+      insertAxis: 'y',
+      Qaxis: 'X′ ( = e⃗ )',
+      Paxis: 'Y′',
+      eeZalign: '-e⃗'
+    }
+  },
+
+  /* ---------------- 车体 / 伸展尺寸规则 ----------------
+     CHASSIS_V 改动默认值时 +1，否则老存档会把新默认值盖回去 */
+  chassis: {
+    v: 2,
+    chassis: { posMode: 'base', pos: [0, 140, 0], size: [580, 580, 105], zDir: -1 },
+    sizer:   { lwh: [1200, 1200, 1100], ballD: 1500, ballH: 480 }
+  }
+});
+
+/* ==================================================================
+   配置：最小测试臂（3 自由度，无竞赛规则、无车体尺寸）
+   ------------------------------------------------------------------
+   这条配置的用处不是"给人用"，而是【证明引擎是通用的】：
+     · 没有 rules  → 任务域那块应该自己让开，不能崩
+     · 没有 chassis→ 尺寸那块应该自己让开，不能崩
+     · 3 自由度    → 引擎不能假设 6 关节
+   web/checks/t12_arm_swap.js 会切到这条配置来跑全链路。
+   ==================================================================================== */
+defineConfig('demo3dof', {
+  label: '最小测试臂（3 自由度 · 无规则）',
+
+  model: {
+    name: '最小测试臂 3DOF',
+    base: { xyz: [0, 0, 0], yaw: 0 },
+    links: [
+      { name: 'base_link', joint: 'base_joint', type: 'revolute', posMode: 'origin',
+        pos: [0, 0, 0], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+Z', limits: null },
+
+      { name: 'l1', joint: 'j1', type: 'revolute', posMode: 'parent',
+        pos: [0, 0, 100], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+X', limits: [-90, 90] },
+
+      { name: 'l2', joint: 'j2', type: 'revolute', posMode: 'parent',
+        pos: [0, 200, 0], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+X', limits: [-90, 90] },
+
+      { name: 'tip', joint: 'tip_fix', type: 'fixed', posMode: 'parent',
+        pos: [0, 0, 90], axes: { x: '+X', y: '+Y', z: '+Z' }, axis: '+Z', limits: null }
+    ]
+  },
+
+  rules: null,      // 没有竞赛规则
+  chassis: null     // 没有车体尺寸规则
+});
+
+/* ==================================================================
+   05-bootstrap.js —— 收尾：把默认配置装上
+
+   ★ 必须排在【所有模块与配置文件之后】执行。
+     原因：applyConfig() 要写 MODEL / RULES / MAP / CHASSIS / SIZER，
+     这些变量的 let 声明在 01 / 02 / 03 里。它们在同一个 <script> 作用域中，
+     而 let 有暂时性死区（TDZ）—— 在本文件位置之前访问会抛 ReferenceError。
+     放在最后，声明都已执行完，就可以安全赋值。
+
+   构建顺序（见 web/lib/assemble.js）：
+       01-kinematics → 02-task-rules → 03-chassis-size → 04-config
+       → configs/*.js（按 index.txt）→ 05-bootstrap
+   ==================================================================================== */
+'use strict';
+
+initDefaultConfig();
+
 </script>
 </body>
 </html>

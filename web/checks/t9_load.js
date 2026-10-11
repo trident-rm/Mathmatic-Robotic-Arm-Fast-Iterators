@@ -52,9 +52,14 @@ globalThis.__api = {
   get MODEL(){return MODEL}, set MODEL(v){MODEL=v},
   get CHAIN(){return CHAIN}, get NJ(){return NJ}, get Q(){return Q}, set Q(v){Q=v},
   demoModel, buildChain, qLimits, fkAll, ikPos, ikSolve6, syncQ,
-  taskToBase, dirToBase, coreFrame, RULES, MAP, D2R,
+  taskToBase, dirToBase, coreFrame, D2R,
+  get RULES(){return RULES}, get MAP(){return MAP},   // ★ 必须 getter：applyConfig 会重新赋值
+  /* ★ 配置层（t12 起）：模型/规则/底盘都从配置来，引擎不再写死同济的值 */
+  applyConfig, listConfigs, activeConfigId, configModel, initDefaultConfig,
+  get CONFIG(){return CONFIG},
   /* ★ t10 用：底盘碰撞箱 / 伸展尺寸（纯追加，不影响原有脚本） */
-  chassisGeom, armStats, sizePanelHTML, drawSizeOverlay, draw3D, boxRange, CHASSIS_V,
+  chassisGeom, armStats, sizePanelHTML, drawSizeOverlay, draw3D, boxRange,
+  get CHASSIS_V(){return CHASSIS_V},
   get CHASSIS(){return CHASSIS}, set CHASSIS(v){CHASSIS=v},
   get SIZER(){return SIZER},     set SIZER(v){SIZER=v},
   get SHOWBOX(){return SHOWBOX}, set SHOWBOX(v){SHOWBOX=v},

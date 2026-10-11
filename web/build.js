@@ -14,9 +14,13 @@
 const fs = require('fs'), path = require('path');
 const A = require('./lib/assemble');
 
-/* 重构前的 armBuilder.html 的 md5。合成结果必须与它逐字节相同，
-   否则说明"抽模块"这一步改动了行为。 */
-const EXPECTED_ARM_BUILDER_MD5 = '5077ab35c6fdcb9fb3be9fbcee573348';
+/* armBuilder.html 的基准 md5。
+   ── 2026-10 配置层改造：从 5077ab35c6fd 变成 5dff80d537f1。
+      这一变是【有意】的：示例臂的杆长、比赛规则、车体尺寸从引擎里搬到了
+      web/src/configs/tongji.js，交付物里多了一段配置 + 一个启动块。
+      搬的时候逐值对照过，同济示例的数值结果没有变（t12 会核对）。
+   ★ 以后凡是"不该变却变了"的情况，这里会拦住 —— 改这个常量前先想清楚。 */
+const EXPECTED_ARM_BUILDER_MD5 = '00c9bd911740d93d515bbf597bc9a717';
 
 const BUILD = path.join(A.ROOT, 'build');
 
@@ -41,18 +45,32 @@ for (const name of A.MODULES) {
 /* ---- 2. 合成 armBuilder ---- */
 log('\n[2] 合成 build/armBuilder.html');
 const armBuilder = A.buildArmBuilder();
-
 const gotMd5 = A.md5(armBuilder);
-if (gotMd5 !== EXPECTED_ARM_BUILDER_MD5) {
-  log('    ✗ md5 不一致！');
-  log('      期望 ' + EXPECTED_ARM_BUILDER_MD5);
-  log('      实际 ' + gotMd5);
-  log('      ⇒ 模块合成结果与重构前不同，抽模块这步改变了代码，必须查。');
-  process.exit(1);
-}
-log('    ✓ md5 ' + gotMd5.slice(0, 12) + ' —— 与重构前逐字节相同');
 
+/* 先落盘，再做基准比对 —— 这样"基准要更新"时不会把构建卡住 */
 A.writeLF(path.join(BUILD, 'armBuilder.html'), armBuilder);
+
+if (gotMd5 !== EXPECTED_ARM_BUILDER_MD5) {
+  if (process.argv.includes('--update-md5')) {
+    const p = __filename;
+    const src = fs.readFileSync(p, 'utf8');
+    const re = /const EXPECTED_ARM_BUILDER_MD5 = '[0-9a-f]+';/;
+    if (!re.test(src)) { log('    ✗ 找不到 EXPECTED_ARM_BUILDER_MD5，无法自动更新'); process.exit(1); }
+    fs.writeFileSync(p, src.replace(re, "const EXPECTED_ARM_BUILDER_MD5 = '" + gotMd5 + "';"), 'utf8');
+    log('    ⚠ md5 变了，已用 --update-md5 写回新基准：' + gotMd5);
+    log('      旧基准：' + EXPECTED_ARM_BUILDER_MD5);
+    log('      ★ 确认这次变化是有意的、且自检全过之后，再把上面这行提交。');
+  } else {
+    log('    ✗ md5 与基准不一致（产物已写出，自检可以照跑）');
+    log('      基准 ' + EXPECTED_ARM_BUILDER_MD5);
+    log('      实际 ' + gotMd5);
+    log('      ⇒ 若不是有意改动，说明代码被改坏了。若是有意改动（比如改配置层），');
+    log('        先跑自检确认没问题，再用  node web/build.js --update-md5  更新基准。');
+    process.exitCode = 2;
+  }
+} else {
+  log('    ✓ md5 ' + gotMd5.slice(0, 12) + ' —— 与基准一致');
+}
 
 /* ---- 3. 合成 armLink（= armBuilder + 连杆模块）---- */
 log('\n[3] 合成 build/armLink.html');

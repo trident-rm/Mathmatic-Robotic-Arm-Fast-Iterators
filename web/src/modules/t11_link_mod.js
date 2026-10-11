@@ -1,4 +1,4 @@
-﻿/* ==================================================================
+/* ==================================================================
    ⛓ 连杆调参 · 任务适应性评估   （armLink.html 追加模块 · 纯追加）
 
    它回答的问题：**在关节限位一动不动的前提下，连杆（各段 offset）怎么改，
@@ -438,11 +438,18 @@ function lkDrawCmp(){
   g.fillStyle = 'rgba(62,166,255,.85)'; g.fillText('蓝框 = 三级任务域 (y,z)', 6, h-6);
 }
 
-/* ---------------- 和「同济示例模型」的差异（防止把候选当成原臂） ---------------- */
-/* ★ 权威定义永远是原脚本的 demoModel()：它跟 localStorage 里那份存档是两回事 */
+/* ---------------- 和「当前配置里的原臂」的差异（防止把候选当成原臂） ---------------- */
+/* ★ 权威定义是【当前配置】里的模型（configModel），不是 demoModel()。
+   配置层改造后 demoModel() = 当前模型（点"示例"时用来把模型重置回配置），
+   拿它当基准会让差异永远是空的 —— 那就正好丢掉了这个防呆功能。
+   注意 configModel(id) 返回的是深拷贝，不是活对象。 */
 function lkDemoDiff(){
   let d = null;
-  try{ d = demoModel(); }catch(e){ return null; }
+  try{
+    d = (typeof configModel === 'function')
+        ? configModel(typeof activeConfigId === 'function' ? activeConfigId() : null)
+        : demoModel();
+  }catch(e){ return null; }
   if(!MODEL || !d) return null;
   const out = [];
   const b = MODEL.base || {}, db = d.base || {};
@@ -466,9 +473,14 @@ function lkDemoDiff(){
 function lkDemoLine(max){
   const dif = lkDemoDiff();
   if(!dif) return '';
-  if(!dif.length) return '<span class="good">✓ 当前模型 = 同济示例模型（原版，一字未改）</span>';
+  /* 基准的名字跟着配置走 —— 换构型后不该还写"同济示例模型" */
+  let base = '配置原臂';
+  try{
+    if(typeof CONFIG !== 'undefined' && CONFIG && CONFIG.label) base = CONFIG.label;
+  }catch(e){}
+  if(!dif.length) return '<span class="good">✓ 当前模型 = ' + lkEsc(base) + '（原版，一字未改）</span>';
   const m = max === undefined ? 5 : max;
-  return '<span class="warn">⚠ 当前模型 ≠ 同济示例模型（' + dif.length + ' 处不同）</span>：' +
+  return '<span class="warn">⚠ 当前模型 ≠ ' + lkEsc(base) + '（' + dif.length + ' 处不同）</span>：' +
     dif.slice(0,m).map(lkEsc).join(' · ') + (dif.length > m ? ' …' : '') +
     '<br>想回原版：顶栏 <b>示例</b>（重新载入原版并覆盖存档），或本面板 <b>↩ 恢复原始臂</b>' +
     '（恢复的是<b>打开本面板时</b>那一份 —— 若那时模型已经被改过，恢复出来的还是改过的）';

@@ -100,11 +100,13 @@ window.addEventListener('DOMContentLoaded', async () => {      // 注册在最�
 
   /* ---- ⑥ 点结果行 = 应用；再恢复原始臂 ---- */
   const snap = JSON.stringify(MODEL);
+  /* 基准名跟配置走（配置层改造后 banner 里写的是 CONFIG.label，不再写死"同济示例模型"） */
+  const cfgLabel = (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.label) || '';
   ok(Array.isArray(LINK.demoDiff()) && LINK.demoDiff().length === 0,
      '★ 原版模型：LINK.demoDiff() 是空数组', LINK.demoDiff());
-  ok($('lform').innerHTML.indexOf('当前模型 = 同济示例模型') >= 0,
-     '面板顶部写着「✓ 当前模型 = 同济示例模型（原版，一字未改）」');
-  ok($('dataBody').innerHTML.indexOf('当前模型 = 同济示例模型') >= 0,
+  ok(cfgLabel.length > 0 && $('lform').innerHTML.indexOf('当前模型 = ' + cfgLabel) >= 0,
+     '面板顶部写着「✓ 当前模型 = ' + cfgLabel + '（原版，一字未改）」');
+  ok($('dataBody').innerHTML.indexOf('当前模型 = ' + cfgLabel) >= 0,
      '数据面板的连杆段也有这一行（就在模型链下面，不容易看错）');
   const bi = LINK.bestRow();
   const row = document.querySelectorAll('#lres tr.rowc')[bi];
@@ -116,7 +118,8 @@ window.addEventListener('DOMContentLoaded', async () => {      // 注册在最�
   const changed = LINK.knobs().filter((k,i)=>Math.abs(r.vals[i]-k.v0)>1e-6).map(k=>k.name);
   ok(changed.length > 0 && LINK.demoDiff().join(' ').indexOf(changed[0]) >= 0,
      '★ 应用后 demoDiff 立刻标出改过的杆（本例：' + changed.join(', ') + '）', LINK.demoDiff());
-  ok($('lform').innerHTML.indexOf('≠ 同济示例模型') >= 0, '面板顶部改成「⚠ 当前模型 ≠ 同济示例模型」');
+  ok($('lform').innerHTML.indexOf('≠ ' + cfgLabel) >= 0,
+     '面板顶部改成「⚠ 当前模型 ≠ ' + cfgLabel + '」');
   ok($('lform').innerHTML.indexOf('点一行 = 应用 + 存进浏览器本地存档') >= 0,
      '面板写明"点一行会存进浏览器本地存档"（防止刷新后以为还是原臂）');
   ok(LINK.limSig() === L0 && JSON.stringify(MODEL.links.map(l=>l.limits)) === LIM,

@@ -19,7 +19,11 @@ const SRC = path.join(WEB, 'src');
 const ROOT = path.join(WEB, '..');                // 仓库根
 
 const TEMPLATE = path.join(SRC, 'apps', 'armBuilder.html');
-const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size'];
+/* 引擎模块：顺序有意义，别乱调（变量声明与启动顺序都靠它） */
+const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size', '04-config'];
+const BOOTSTRAP = '05-bootstrap';
+const CONFIG_DIR = path.join(SRC, 'configs');
+const CONFIG_INDEX = path.join(CONFIG_DIR, 'index.txt');
 
 const read = p => fs.readFileSync(p, 'utf8');
 
@@ -32,14 +36,36 @@ const readLF = p => read(p).replace(/\r\n/g, '\n');
 
 const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
 
+/* 读配置清单（一行一个 id，# 开头为注释） */
+function readConfigIds() {
+  return readLF(CONFIG_INDEX)
+    .split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !s.startsWith('#'));
+}
+
 /* 把骨架里的 <!--__MODULE:name__--> 替换成模块源码 */
 function embedModules(template, modDir) {
-  let out = template.replace(/\r\n/g, '\n');
+  let out = String(template).replace(/\r\n/g, '\n');
   for (const name of MODULES) {
     const marker = '<!--__MODULE:' + name + '__-->';
     if (!out.includes(marker)) throw new Error('模板里没有标记 ' + marker);
     out = out.replace(marker, () => readLF(path.join(modDir, name + '.js')));
   }
+  /* 配置文件与应用顺序表打进同一个 script 块：
+     先 defineConfig(...)，最后 05-bootstrap 调 initDefaultConfig() */
+  const marker = '<!--__MODULES__-->';
+  if (!out.includes(marker)) throw new Error('模板里没有标记 ' + marker);
+  const parts = [];
+  const ids = readConfigIds();
+  if (!ids.length) throw new Error('配置清单是空的：' + CONFIG_INDEX);
+  for (const id of ids) {
+    const p = path.join(CONFIG_DIR, id + '.js');
+    if (!fs.existsSync(p)) throw new Error('配置清单里有 ' + id + '，但找不到 ' + p);
+    parts.push(readLF(p));
+  }
+  parts.push(readLF(path.join(modDir, BOOTSTRAP + '.js')));
+  out = out.replace(marker, () => parts.join('\n'));
   return out;
 }
 

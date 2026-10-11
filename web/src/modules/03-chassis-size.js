@@ -16,10 +16,14 @@
       ★ 刻意【不】报"当前位形/可达集的长宽高包围盒"：模型里没有杆件的碰撞体，
         而且臂的 yaw 限位还没加（模型上能转到车背面），拿骨架去量长宽高只会得出假数。
    ================================================================== */
-const CHASSIS_V   = 2;                 // ★ 改动 CHASSIS 默认值时必须 +1，
-                                       //   否则老存档（localStorage）会把新默认值盖回去
-const CHASSIS_DEF = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
-const SIZER_DEF   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+/* ★ 车体尺寸规则来自配置（configs/*.js 的 chassis 段），引擎不再自带同济的数。
+   CHASSIS_V 由配置给（改配置里的默认值时要 +1，否则老存档会把新默认值盖回去）。
+   "恢复默认"取的是【当前配置】的默认值。 */
+let CHASSIS_V = 2;
+const chassisDefault = () => (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.chassis)
+  ? CONFIG.chassis.chassis : { posMode:'base', pos:[0,0,0], size:[1,1,1], zDir:-1 };
+const sizerDefault   = () => (typeof CONFIG !== 'undefined' && CONFIG && CONFIG.chassis)
+  ? CONFIG.chassis.sizer   : { lwh:[0,0,0], ballD:0, ballH:0 };
 const C_CHASSIS = '#ffd400', C_LWH = '#00e5c0', C_BALL = '#a78bfa';
 const F_SM = "11px system-ui,'Microsoft YaHei'";
 const F_BD = "bold 11px system-ui,'Microsoft YaHei'";
@@ -323,8 +327,8 @@ function openChassisForm(force){
   f.onchange = applyChassisForm;               // 事件委托：任一控件 change 即应用（不必滚到底找按钮）
   document.getElementById('cClose').onclick = () => { f.className = ''; };
   document.getElementById('cReset').onclick = () => {
-    Object.assign(CHASSIS, JSON.parse(JSON.stringify(CHASSIS_DEF)));
-    Object.assign(SIZER,   JSON.parse(JSON.stringify(SIZER_DEF)));
+    Object.assign(CHASSIS, JSON.parse(JSON.stringify(chassisDefault())));
+    Object.assign(SIZER,   JSON.parse(JSON.stringify(sizerDefault())));
     openChassisForm(true);                       // 重画表单 ⇒ 输入框回到默认值
     applyChassisForm();
   };

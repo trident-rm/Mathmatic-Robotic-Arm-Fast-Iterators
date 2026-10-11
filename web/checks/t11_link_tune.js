@@ -39,10 +39,15 @@ const modSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_mod.js'));
 const cssSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_css.css'));
 const blocks = html => [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
 const SB = blocks(src), OB = blocks(out);
-ok(SB.length === 3 && OB.length === 4, 'armBuilder 有 3 个 script，armLink 有 4 个（只多一个）', [SB.length, OB.length]);
-ok(SB.every((b,i)=> b === OB[i]), '原 3 个 script 逐字节全部相同 —— 没有动过原逻辑', SB.map((b,i)=>b===OB[i]));
-ok(OB[3].indexOf('连杆调参') >= 0, '第 4 个 script 就是连杆模块');
-ok(OB[3].trim() === modSrc.trim(), '模块源码与 t11_link_mod.js 一字不差');
+/* armBuilder 的 script 块数由构建决定（配置层加过一个 ⇒ 现在 4 个），
+   不写死数字：只要求 armLink 恰好比 armBuilder 多一个，且多出来的那个是连杆模块。 */
+const NMOD = SB.length;
+ok(SB.length >= 1 && OB.length === NMOD + 1,
+   'armLink 只比 armBuilder 多一个 script（armBuilder ' + NMOD + ' 个 / armLink ' + OB.length + ' 个）',
+   [SB.length, OB.length]);
+ok(SB.every((b,i)=> b === OB[i]), '原脚本逐字节全部相同 —— 没有动过原逻辑', SB.map((b,i)=>b===OB[i]));
+ok(OB[NMOD].indexOf('连杆调参') >= 0, '最后那个 script 就是连杆模块');
+ok(OB[NMOD].trim() === modSrc.trim(), '模块源码与 t11_link_mod.js 一字不差');
 const ver = /armLink：由 t11_patch.js 生成 · armBuilder\((\w+)\) \+ 连杆模块\((\w+)\) · css\((\w+)\)/.exec(out);
 ok(!!ver, '版本注释存在');
 if(ver){
