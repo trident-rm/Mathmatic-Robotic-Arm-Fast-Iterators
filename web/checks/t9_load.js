@@ -76,6 +76,8 @@ globalThis.__api = {
   wizReset, wizEnsureArms, wizBuildArm, wizValidate,
   wizOpen, wizClose, wizNext, wizPrev, wizFinish, initWizard,
   renderAngles, setSectOpen, syncVisMenu,
+  /* ★ 旋转角度滑条 + 装配参数（进 JSON）*/
+  renderVehicle, vehicleOf, setVehicle, onChangeJoint, resetAllJoints, syncQReadout,
   get ARMS(){return ARMS}, get ARMSTATS(){return ARMSTATS},
   fkAllArm, fkAllArms,
   get CONFIG(){return CONFIG},

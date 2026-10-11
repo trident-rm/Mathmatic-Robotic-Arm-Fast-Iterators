@@ -506,7 +506,8 @@ function setModel(m, save){
   if(CONFIG) CONFIG.__arms = [m];
   document.getElementById('modal').classList.add('hidden');
   updateAll(); if(save !== false) saveLocal();
-  if(typeof renderAngles === 'function') renderAngles();   // 06-ui：刷新"旋转角度"表
+  if(typeof renderAngles === 'function') renderAngles();   // 06-ui：刷新"旋转角度"滑条
+  if(typeof renderVehicle === 'function') renderVehicle(); // 06-ui：刷新"装配参数"
 }
 
 /* ==================================================================
@@ -689,6 +690,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   syncCfgInputs();
   if(typeof renderAngles === 'function') renderAngles();
+  if(typeof renderVehicle === 'function') renderVehicle();
 });
 function doDump(){
   const F = fkAll(Q);

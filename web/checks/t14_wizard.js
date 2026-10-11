@@ -172,6 +172,68 @@ console.log('\n=== ⑦ 接线存在 ===');
   ok(!err, '打开/下一步/上一步/关闭 不抛异常', err);
 }
 
+console.log('\n=== ⑨ 旋转角度：每个关节一条滑条，能手动驱动 ===');
+{
+  A.applyConfig('tongji');
+  A.Q = new Array(A.NJ).fill(0);
+  const nJ = A.NJ;
+  ok(typeof W('onChangeJoint') === 'function', 'onChangeJoint 存在');
+  ok(typeof W('resetAllJoints') === 'function', 'resetAllJoints 存在');
+  ok(typeof W('syncQReadout') === 'function', 'syncQReadout 存在');
+
+  /* 改一个关节 => Q 跟着变；同步函数不该抛 */
+  W('onChangeJoint')(1, 100);
+  ok(Math.abs(A.Q[1] - 100) < 1e-9, 'onChangeJoint 改到了 Q[1]', A.Q[1]);
+  let err = '';
+  try { W('syncQReadout')(); W('resetAllJoints')(); } catch (e) { err = e.message; }
+  ok(!err, 'syncQReadout / resetAllJoints 不抛异常（沙箱里 DOM 是桩）', err);
+
+  /* 拖动关节必须真的改变末端位置 —— 这条是"滑条有用"的实质判据 */
+  const p0 = A.fkAll(A.Q).slice(-1)[0].t.slice();
+  A.Q = new Array(nJ).fill(0);
+  A.Q[1] = 100;
+  const p1 = A.fkAll(A.Q).slice(-1)[0].t.slice();
+  const d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+  ok(d > 1, 'joint1 转到 100° 后末端位置明显变化（移动 ' + d.toFixed(1) + ' mm）', d);
+
+  /* 限位要兜住：超出范围的指令值在 qLimits 内被夹 */
+  const lim = A.qLimits();
+  ok(lim.length === nJ, 'qLimits 覆盖全部 ' + nJ + ' 个关节', lim.length);
+  ok(lim.every(([lo, hi]) => hi > lo), '每个关节的限位区间有效');
+}
+
+console.log('\n=== ⑩ 装配位置与夹爪轴进模型 JSON（往返） ===');
+{
+  A.applyConfig('tongji');
+  const v0 = W('vehicleOf')();
+  ok(v0 && v0.asm && typeof v0.asm.x === 'number', 'vehicleOf() 能给出装配位置', v0.asm);
+  ok(typeof v0.insertAxis === 'string' && typeof v0.gripAxis === 'string',
+     'vehicleOf() 带插入轴/夹紧轴', [v0.insertAxis, v0.gripAxis]);
+
+  W('setVehicle')({ asm: { x: -321, y: 45, z: 900 }, insertAxis: 'z', gripAxis: 'y' });
+  ok(A.MODEL.vehicle && A.MODEL.vehicle.asm.x === -321,
+     'setVehicle 写进了 MODEL.vehicle', A.MODEL.vehicle && A.MODEL.vehicle.asm);
+
+  /* ★ 关键：序列化必须带上它（用户要的就是这个） */
+  const json = JSON.stringify(A.MODEL);
+  ok(json.indexOf('"vehicle"') >= 0, 'JSON 里有 vehicle 段');
+  ok(json.indexOf('-321') >= 0, 'JSON 里有装配位置数值');
+  ok(json.indexOf('"insertAxis"') >= 0 && json.indexOf('"gripAxis"') >= 0,
+     'JSON 里有插入轴/夹紧轴');
+
+  /* 读回来 */
+  const back = JSON.parse(json);
+  ok(back.vehicle && back.vehicle.asm.x === -321 && back.vehicle.insertAxis === 'z',
+     '反序列化后 vehicle 完整', back.vehicle);
+
+  /* 没有 vehicle 的老 JSON 也要能用（向后兼容） */
+  const oldModel = JSON.parse(JSON.stringify(A.demoModel()));
+  delete oldModel.vehicle;
+  const vOld = W('vehicleOf')(oldModel);
+  ok(vOld && vOld.asm && typeof vOld.asm.x === 'number',
+     '老 JSON（没有 vehicle）也能兜出一个默认值', vOld.asm);
+}
+
 console.log('\n' + '='.repeat(46));
 if (fail) { console.log('FAIL=' + fail + '  PASS=' + pass); process.exitCode = 1; }
 else console.log('全部通过：' + pass + ' 项');

@@ -42,9 +42,22 @@
   .sect-hd button{margin-left:auto}
   .sect-bd{display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .sect-bd.hidden{display:none}
-  #bdList{flex:1 1 40%;min-height:90px}
-  #bdQ{flex:0 0 auto;max-height:190px;overflow-y:auto}
-  #bdData{flex:1 1 40%;min-height:120px;background:#111827}
+  #bdList{flex:1 1 42%;min-height:90px}
+  /* 旋转角度与装配参数是"内容固定、可能很长"的两块：内容自己滚，
+     不跟模型链/可达域抢空间（否则四块一起会把上面挤没）。
+     滑条行做紧凑：一个关节 ≈ 27px，6 个关节约 165px 就能一次看全。 */
+  #bdQ{flex:0 0 auto;max-height:152px;overflow-y:auto}
+  #bdVeh{flex:0 0 auto;max-height:96px;overflow-y:auto}
+  #bdData{flex:1 1 58%;min-height:120px;background:#111827}
+
+  /* ---- 装配参数 ---- */
+  #vehBody{padding:7px 12px 9px;font-size:11.5px}
+  .vehrow{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+  .vehrow .k1{color:var(--dim);min-width:62px}
+  .vehrow .u{color:#5d6b88;font-size:10.5px}
+  .vehrow input,.vehrow select{background:#0b1020;color:var(--fg);border:1px solid var(--line);
+    border-radius:5px;padding:2px 4px;font-size:11px}
+  .vehnote{color:#5d6b88;font-size:10.5px}
 
   /* ---- 顶栏的勾选下拉 ---- */
   .pop{position:absolute;display:none;z-index:40;background:#0b1020;border:1px solid var(--line);
@@ -54,14 +67,20 @@
     color:var(--fg);cursor:pointer;white-space:nowrap}
   button.ghost{background:transparent;border-color:#2c3a58}
 
-  /* ---- 旋转角度表 ---- */
-  #qbody{padding:6px 12px 8px}
-  #qbody table{width:100%;border-collapse:collapse;font-size:11.5px}
-  #qbody td{border-bottom:1px solid #1e2740;padding:2px 4px}
-  #qbody td.nm{color:var(--dim)}
-  #qbody td.v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--fg)}
-  #qbody tr.hot td.v{color:#ffe066}
-  #qbody .axc{color:#8fa0bf}
+  /* ---- 旋转角度：每个关节一条滑条（紧凑：一行 ≈ 27px）---- */
+  #qbody{padding:5px 12px 6px}
+  .qarm{color:#8fd0ff;font-weight:600;font-size:10.5px;margin:3px 0 2px}
+  .qrow{margin-bottom:3px}
+  .qhd{display:flex;align-items:baseline;gap:6px;font-size:10.5px;line-height:15px}
+  .qnm{color:var(--fg);font-weight:600}
+  .qax{color:#8fa0bf}
+  .qv{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:#ffe066}
+  .qs{display:flex;align-items:center;gap:5px;margin-top:0}
+  .qs input[type=range]{flex:1;min-width:0;height:13px;accent-color:#3ea6ff}
+  .qs input[type=number]{background:#0b1020;color:var(--fg);border:1px solid var(--line);
+    border-radius:5px;padding:0 4px;font-size:10.5px;width:52px}
+  .qrs{padding:0 5px;line-height:15px;font-size:10.5px;color:#8fa0bf}
+  .qlim{display:none}      /* 限位并进滑条的 title，省一行高度 */
 
   /* ---- 新建向导 ---- */
   #wiz{position:fixed;inset:0;background:rgba(6,9,17,.72);display:none;
@@ -230,9 +249,9 @@
       <div id="split" title="上下拖动 = 调两栏高度 · 双击复原"></div>
 
       <!-- ② 旋转角度 -->
-      <div class="sect-hd" id="hdQ" title="点标题可折叠">
+      <div class="sect-hd" id="hdQ" title="每个关节一条滑条，拖动即可看不同角度下的情况">
         <span class="caret">▾</span><span>旋转角度</span>
-        <button id="btnQPanel" class="ghost" title="展开滑条，拖动手动调各关节角">🎛 关节</button>
+        <button id="btnQReset" class="ghost" title="所有关节回到零位">↺ 归零</button>
       </div>
       <div class="sect-bd" id="bdQ">
         <div id="qbody"></div>
@@ -240,7 +259,16 @@
 
       <div id="split2" title="上下拖动 = 调两栏高度 · 双击复原"></div>
 
-      <!-- ③ 可达域 / 任务域 -->
+      <!-- ③ 装配参数（进 JSON） -->
+      <div class="sect-hd" id="hdVeh"
+           title="装配臂在世界坐标系的位置、夹爪往哪个轴插入；这两项随模型一起存进 JSON">
+        <span class="caret">▾</span><span>装配参数</span>
+      </div>
+      <div class="sect-bd" id="bdVeh">
+        <div id="vehBody"></div>
+      </div>
+
+      <!-- ④ 可达域 / 任务域 -->
       <div class="sect-hd" id="hdData" title="点标题可折叠">
         <span class="caret">▾</span><span>可达域 / 任务域数据</span>
         <button id="btnAnim" class="primary" title="播放插入装配演示">▶ 示例装配动画</button>

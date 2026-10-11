@@ -129,6 +129,8 @@ function applyConfig(id) {
 
   /* 4) 按配置刷新能刷的界面（引擎不认识的控件就不动） */
   syncConfigUI();
+  if (typeof renderAngles === 'function') renderAngles();
+  if (typeof renderVehicle === 'function') renderVehicle();
   return cfg;
 }
 

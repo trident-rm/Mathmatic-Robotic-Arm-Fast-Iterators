@@ -334,8 +334,13 @@ function wizFinish() {
 
   /* 装配位置 / 夹爪轴：没有规则时无处可写，就在 CONFIG 上留一份，
      后续给它加 rules 时可以拿来填。 */
-  clone.asmInit = { x: WIZ.asm.x, y: WIZ.asm.y, z: WIZ.asm.z };
-  clone.gripper = { insertAxis: WIZ.insertAxis, gripAxis: WIZ.gripAxis };
+  /* ★ 装配位置与夹爪轴写进【模型】的 vehicle 块（随 JSON 走）。
+     之前只挂在配置上，导出/读取时带不走 —— 用户指出后改成进模型。 */
+  const veh = { asm: { x: WIZ.asm.x, y: WIZ.asm.y, z: WIZ.asm.z },
+                insertAxis: WIZ.insertAxis, gripAxis: WIZ.gripAxis };
+  built.forEach(m => { m.vehicle = JSON.parse(JSON.stringify(veh)); });
+  clone.asmInit = veh.asm;                 // 保留旧的挂法，兼容已有引用
+  clone.gripper = { insertAxis: veh.insertAxis, gripAxis: veh.gripAxis };
 
   applyConfig(id);
 
@@ -345,6 +350,7 @@ function wizFinish() {
   wizClose();
   updateAll();
   if (typeof renderAngles === 'function') renderAngles();
+  if (typeof renderVehicle === 'function') renderVehicle();
   if (typeof initConfigSelector === 'function') initConfigSelector();
   saveLocal();
 }
