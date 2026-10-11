@@ -19,7 +19,7 @@ const A = require('./lib/assemble');
       web/src/configs/tongji.js，交付物里多了一段配置 + 一个启动块。
       搬的时候逐值对照过，同济示例的数值结果没有变（t12 会核对）。
    ★ 以后凡是"不该变却变了"的情况，这里会拦住 —— 改这个常量前先想清楚。 */
-const EXPECTED_ARM_BUILDER_MD5 = 'bfac1f062c250ff882415bd3d152d03f';
+const EXPECTED_ARM_BUILDER_MD5 = '0973c963fc9a60e7b88b094b0a762f39';
 
 const BUILD = path.join(A.ROOT, 'build');
 
