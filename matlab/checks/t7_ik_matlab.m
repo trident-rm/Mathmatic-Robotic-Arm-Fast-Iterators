@@ -30,10 +30,15 @@ for i = 1:height(T)
         tmp = [1;0;0]; if abs(dot(tmp,yt))>0.9, tmp=[0;1;0]; end
         x0 = cross(tmp,yt); x0 = x0/norm(x0); z0 = cross(x0,yt);
         Rr = axang2rotm([yt' roll*pi/180]) * [x0 yt z0];
-        Tt = eye(4); Tt(1:3,1:3) = Rr; Tt(1:3,4) = Eb(:);
+        Tt = eye(4); Tt(1:3,1:3) = Rr;
+        % ★ 单位：inverseKinematics 的目标位姿是【米】，而 Eb 是 mm，必须 /1000。
+        %   不除的话目标点被放到 390 米外，求解器只能报 "best available"，
+        %   位置误差恰好是 1000 倍（实测残差 390490 ↔ 目标 390.5mm）。
+        %   这个 bug 一直存在，只是以前被"坐标映射差 90°"掩盖着没暴露出来。
+        Tt(1:3,4) = Eb(:) / 1000;
         [cfg, ~] = ik(eeName, Tt, weights, q0);
         Tnow = getTransform(arm, cfg, eeName);
-        e = norm(Tnow(1:3,4) - Eb(:));
+        e = norm(Tnow(1:3,4) - Eb(:)/1000) * 1000;      % 米 -> 毫米
         ynow = Tnow(1:3,2)/norm(Tnow(1:3,2));
         ang = acos(max(-1,min(1,dot(ynow,yt))));
         if e < best, best = e; end
@@ -56,9 +61,13 @@ writetable(table((1:height(T))', jsOK, mOK, mErr, 'VariableNames',{'idx','js_ok'
 fprintf('  对照明细已存 t7_ik_compare.csv\n');
 end
 
-% ---- 与 JS 一致的坐标映射（MAP.swap = true, 底盘高 170）----
-function p = taskToBase(p), p = [-p(1), -p(2), p(3)-170]; end
-function d = dirToBase(d),  d = [-d(1), -d(2),  d(3)];     end
+% ---- 坐标映射 ----
+% ★ 不要再在这里手写 taskToBase / dirToBase！
+%   原来这两个局部函数是 [-p1,-p2,p3-170]（Rz(180°) 那一类），和网页实际用的
+%   换算差 90°，于是 200 个目标点全部摆错，报出"RST 可解 0/200"的假结论。
+%   现在统一用 matlab/model/ 下的 taskToBase.m / dirToBase.m ——
+%   它们与网页 04-config.js 的 mapObj() 是同一套公式，参数来自 armBase.m。
+%   （函数文件里的局部函数会【遮蔽】同名的库函数，所以这里必须删掉。）
 function e = coreFrameJS(P)
     th = P.th*pi/180; ph = P.ph*pi/180;
     e = [sin(ph)*cos(th), sin(ph)*sin(th), cos(ph)];

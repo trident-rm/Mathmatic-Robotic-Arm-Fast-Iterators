@@ -22,8 +22,12 @@ for i = 1:numel(spec)
             mat2str(spec(i).offset), mat2str(spec(i).limits));
 end
 
+% ★ base 必须与 buildChain 用的那套一致（armBase.m）。
+%   以前这里写死 yaw=0，而 buildChain 不看 yaw，两边"碰巧"一致；
+%   现在安装朝向进了树，这里的 cfg.base 也得跟上，否则 chainFK 与 RST 会差一个 Rz(yaw)。
+ab = armBase();
 cfg = struct('name', '当前臂型', 'spec', spec, ...
-             'base', struct('xyz', [0 0 0], 'yaw', 0), ...
+             'base', struct('xyz', [0 0 0], 'yaw', ab.yaw), ...
              'crescent', struct('on', false), ...
              'boxes', struct('name', {}, 'box', {}), 'nSample', 1e4);
 tic; P0 = armFeasData(cfg); t0 = toc;
@@ -36,17 +40,23 @@ assert(norm(nO.o) < 1e-9 && max(abs(nO.R - eye(3)), [], 'all') < 1e-12, ...
        '原点系 O 应为单位位姿');
 fprintf('  ✓ 原点坐标系 O 为单位位姿（位置/姿态误差 ~0）\n');
 
-% --- 断言 B：零位（全零）时各 body 原点 = base.xyz + 累积 offset（本模型只含平移） ---
+% --- 断言 B：零位（全零）时各 body 原点 = base.xyz + Rz(base.yaw)·累积 offset ---
 % 注意：P0.nodes 是【显示位形】下的结果（joint2 限位 [90,200]，显示位形是 90° 而非 0°），
 %       所以"零位"的核对必须用独立参考实现 chainFK 在全零处算，不能直接拿 nodes 比。
+% ★ 安装朝向进来之后，累积 offset 必须先绕 Z 转 base.yaw 再加到 base.xyz 上
+%   （以前 yaw=0，直接相加碰巧对；yaw≠0 就不能再那样了）。
 nJ0 = P0.meta.nJoint;
 ps0 = chainFK(spec, cfg.base, zeros(1, nJ0));
+aa  = deg2rad(cfg.base.yaw);
+RzB = [cos(aa) -sin(aa) 0; sin(aa) cos(aa) 0; 0 0 1];
 cum = cfg.base.xyz(:).';
+off = zeros(3, 1);                 % 累积 offset（在臂基座系里）
 okOff = true;
 rotSeen = false;      % 一旦祖先里出现过固定旋转，"原点=累积 offset"的简单关系就不再成立
 for i = 1:numel(spec)
     if isfield(spec(i),'rot') && ~isempty(spec(i).rot), rotSeen = true; end
-    cum = cum + spec(i).offset;
+    off = off + spec(i).offset(:);
+    cum = cfg.base.xyz(:).' + (RzB * off).';
     if rotSeen
         fprintf('  %-10s 自身或祖先含固定旋转，原点累加关系跳过（由 chainFK vs RST 覆盖）\n', ...
                 spec(i).name);
@@ -126,20 +136,27 @@ fprintf('  ✓ 立体可达集（z 跨度 %.0f mm > 400，体素数 %d）；到�
 
 % --- 断言 G：joint2 限位与杆方向；杆长 = 相邻坐标系间距 ---
 % joint2 axis=-x、零位杆指 +z ⇒ rod(θ) = R(-x,θ)·(0,0,1) = (0, sinθ, cosθ)
+% ★ 解码表描述的是【臂基座系】里的杆方向。chainFK 现在算的是整机系
+%   （根部含 Rz(base.yaw)），所以比之前要左乘 Rz(-yaw) 把它"卸回"基座系。
+%   这里把断言改成在基座系里做，这样解码表本身不用改。
+RzInv = RzB.';
+inBase = @(R, v) RzInv * (R * v);
 lo2 = min(spec(3).limits); hi2 = max(spec(3).limits);
 assert(lo2 == -90 && hi2 == 200, 'joint2 限位应为 -90 ~ +200');
-fprintf('  joint2 杆方向(轴-x): ');
+fprintf('  joint2 杆方向(轴-x，臂基座系): ');
 nJt = P0.meta.nJoint;
 for th = [-90 0 90 180 200]
     qq = zeros(1, nJt); qq(3) = th;
     ps = chainFK(spec, cfg.base, qq);
-    d = ps{4}.R * [0;0;1];                 % link2 是第 3 个 body ⇒ poses{4}
+    d = inBase(ps{4}.R, [0;0;1]);          % link2 是第 3 个 body ⇒ poses{4}
     fprintf('%+d° %s  ', th, mat2str(round(d.',3)));
 end
 fprintf('\n');
 qq = zeros(1, nJt); qq(3) = -90;
-ps = chainFK(spec, cfg.base, qq);           assert(norm(ps{4}.R*[0;0;1] - [0 -1 0].') < 1e-12, '-90° 应指 -y');
-ps = chainFK(spec, cfg.base, zeros(1, nJt));assert(norm(ps{4}.R*[0;0;1] - [0 0 1].')  < 1e-12, '零位应指 +z');
+ps = chainFK(spec, cfg.base, qq);
+assert(norm(inBase(ps{4}.R,[0;0;1]) - [0 -1 0].') < 1e-12, '-90° 应指 -y');
+ps = chainFK(spec, cfg.base, zeros(1, nJt));
+assert(norm(inBase(ps{4}.R,[0;0;1]) - [0 0 1].')  < 1e-12, '零位应指 +z');
 fprintf('  ✓ 零位 0° 指 +z（0° 在限位内）；-90° 指 -y；上限 200°\n');
 % 杆长 = 相邻坐标系间距 = offset
 seg = zeros(1, numel(spec));
@@ -206,25 +223,28 @@ for i = 1:numel(spec)
     else,                       limAll(k,:) = sort(spec(i).limits); end
 end
 armC = buildChain(spec);
-aB = deg2rad(cfg.base.yaw);
-RzB = [cos(aB) -sin(aB) 0; sin(aB) cos(aB) 0; 0 0 1];
-Tw  = [RzB, cfg.base.xyz(:)/1000; 0 0 0 1];
+% ★ RST 那边的正解现在【已经含安装朝向】（buildChain 把 base.yaw 当根部固定变换），
+%   而 chainFK 的 base 参数是同一个来源 ⇒ 两边都已在整机系，这里【不再】补 Tw。
+%   以前是 buildChain 不含 yaw、测试手动 Tw*Tr，现在反过来了；
+%   两处都补就会转两次，是这次改造最容易犯的错。
+%   （armC.BodyNames 里可能有根部安装体 base_mount，取链上真正的 body 名来比。）
+lkC = find(~strcmp(armC.BodyNames, 'base_mount'));
+assert(numel(lkC) == numel(spec), '链上 body 数应与 spec 一致');
 rng(7); dP = 0; dR = 0;
 for t = 1:20
     qd = limAll(:,1).' + rand(1, P0.meta.nJoint).*(limAll(:,2)-limAll(:,1)).';
     ps = chainFK(spec, cfg.base, qd);
     for i = 1:numel(spec)
-        Tr = getTransform(armC, deg2rad(qd), armC.BodyNames{i});
-        Tt = Tw * Tr;                       % 世界系，单位【米】
-        % 坑 1：ps{i+1}.t 是 3x1、Tt(1:3,4) 也是 3x1；若一个写成 .' 就变 3x3，norm 成 Frobenius 范数
-        % 坑 2：Tt 是米、ps 是毫米，必须 *1000，否则 z=75 那种点会报 ~75 的假误差
-        pRst = Tt(1:3,4)*1000;
+        Tr = getTransform(armC, deg2rad(qd), armC.BodyNames{lkC(i)});
+        % 坑 1：ps{i+1}.t 是 3x1、Tr(1:3,4) 也是 3x1；若一个写成 .' 就变 3x3，norm 成 Frobenius 范数
+        % 坑 2：Tr 是米、ps 是毫米，必须 *1000，否则 z=75 那种点会报 ~75 的假误差
+        pRst = Tr(1:3,4)*1000;
         if t == 1 && i == numel(spec)
             fprintf('  样例 q=[%.1f %.1f]deg  %s: chainFK %s | RST %s mm\n', qd, ...
-                    armC.BodyNames{i}, mat2str(round(ps{i+1}.t(:).',4)), mat2str(round(pRst.',4)));
+                    spec(i).name, mat2str(round(ps{i+1}.t(:).',4)), mat2str(round(pRst.',4)));
         end
         dP = max(dP, norm(ps{i+1}.t(:) - pRst));
-        dR = max(dR, max(abs(ps{i+1}.R - Tt(1:3,1:3)), [], 'all'));
+        dR = max(dR, max(abs(ps{i+1}.R - Tr(1:3,1:3)), [], 'all'));
     end
 end
 fprintf('  chainFK vs RST getTransform（20 组随机构型 × %d 个 body）：位置 %.3g mm，姿态 %.3g\n', ...

@@ -33,7 +33,7 @@ rng(0);
 
 % ---------------- 1 建链（纯杆+关节） ----------------
 [arm, nJ] = buildChain(spec);
-nb = arm.NumBodies;
+% 树里除链本体外可能还有根部安装体（base_mount），第 4 节会按名字跳过它
 
 % 可动关节的采样范围（未设限位的按 ±180deg 处理）
 limDeg = zeros(nJ, 2);
@@ -64,12 +64,14 @@ for i = 1:numel(spec)
     end
 end
 
-% ---------------- 2 安装位姿：臂基座系 -> 整机原点系 O ----------------
-% 不要用 rotz()：RTB(Peter Corke) 同名函数角度单位约定不同，手写避免歧义
+% ---------------- 2 基座在整机系里的位置 ----------------
+% ★ 安装朝向（yaw）现在由 buildChain 作为【根部固定变换】加进树里了，
+%   所以这里【只平移、不再旋转】—— 否则就转两次。
+%   （2026-10 配置层改造前是这里手动 Rz，buildChain 不管；现在反过来。
+%     两处都做会得到"网页差 90°"之外的另一种错，且更难发现。）
+% 不要用 rotz()：RTB(Peter Corke) 同名函数角度单位约定不同
 % 点云内部统一按"米"变换、最后 ×1000 回 mm（曾因 mm 与 m 相加导致 base 高度只加了 0.2mm）
-a  = deg2rad(cfg.base.yaw);
-Rz = [cos(a) -sin(a) 0; sin(a) cos(a) 0; 0 0 1];
-Tb = [Rz, cfg.base.xyz(:)/1000; 0 0 0 1];
+Tb = [eye(3), cfg.base.xyz(:)/1000; 0 0 0 1];
 toWorldMM = @(pMeters) ((Tb(1:3,1:3)*pMeters.' + Tb(1:3,4)).')*1000;
 
 % ---------------- 3 采样：区间盒 vs 月牙过滤 ----------------
@@ -96,17 +98,21 @@ end
 % ---------------- 4 显示用：各 body 坐标系 + 骨架 ----------------
 nodes = struct('name', {}, 'joint', {}, 'type', {}, 'o', {}, 'R', {}, 'axis', {}, ...
                'axLabel', {}, 'lim', {}, 'unlimited', {});
+% ★ 树里可能有个根部安装体（buildChain 加的 base_mount），它不是"链的一段"，
+%   要跳过 —— 否则 lk(i) 会与 spec 错位（曾因此报"索引超出 7"）。
+lk  = find(~strcmp(arm.BodyNames, 'base_mount'));
+nb  = numel(lk);
 % 原点系 O 本身
 nodes(1) = mkNode('O(整机原点)', '', 'fixed', [0 0 0], eye(3), [0 0 0], '', [], false);
-% 臂基座系
-nodes(2) = mkNode('base(臂安装)', '', 'fixed', cfg.base.xyz(:).', Rz, [0 0 0], '', [], false);
+% 臂基座系：yaw 已在树里，这里只体现平移，姿态取单位阵
+nodes(2) = mkNode('base(臂安装)', '', 'fixed', cfg.base.xyz(:).', eye(3), [0 0 0], '', [], false);
 pose = zeros(nb + 1, 3);
 pose(1,:) = cfg.base.xyz(:).';
 for i = 1:nb
-    nm = arm.BodyNames{i};
-    T = getTransform(arm, deg2rad(qHome), nm);     % 米，臂基座系；注意 qHome 是【度】，必须转弧度
+    nm = arm.BodyNames{lk(i)};
+    T = getTransform(arm, deg2rad(qHome), nm);     % 米，整机系（yaw 已含在树里）
     o = toWorldMM(T(1:3,4).');                     % 整机系 mm
-    Rw = Rz * T(1:3,1:3);
+    Rw = T(1:3,1:3);
     s = spec(i);
     jn = s.name;
     if isfield(s,'joint') && ~isempty(s.joint), jn = s.joint; end
