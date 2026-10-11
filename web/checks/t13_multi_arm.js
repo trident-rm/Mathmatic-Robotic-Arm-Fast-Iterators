@@ -214,6 +214,95 @@ console.log('\n=== ⑦ 反复切换配置不残留状态 ===');
      '两次取同济臂零位末端结果完全相同', [p1.map(v => +v.toFixed(3)), p2.map(v => +v.toFixed(3))]);
 }
 
+console.log('\n=== ⑧ 按臂分别校核（两只手各做一次）===');
+{
+  A.applyConfig('dual_demo');
+  ok(A.armCount() === 2, '双臂 2 条', A.armCount());
+
+  /* 每条臂都有自己的装配位 */
+  const a0 = A.asmOfArm(0), a1 = A.asmOfArm(1);
+  ok(a0 && a1 && typeof a0.x === 'number', 'asmOfArm 给出每条臂的装配位', [a0, a1]);
+
+  /* dual_demo 是"没有规则"的构型 ⇒ taskToBaseArm 返回 null（有守卫）。
+     要验按臂换算，先给它临时挂一张 map（swap, baseH=170），验完还原。 */
+  ok(A.taskToBaseArm([0,0,0], 0) === null,
+     '没有规则时 taskToBaseArm 返回 null（有守卫，不抛）');
+  const MAP_SAVE = A.MAP;
+  A.setTestMap(A.mapObj({ yaw: -90, baseH: 170, taskMap: 'swap' }));
+  ok(!!A.MAP, '临时挂上 map 后可用');
+
+  /* ★ 装配位不同 ⇒ 同一任务点转到各自 base 系后坐标不同 */
+  const P = [-50, 200, 600];
+  const b0 = A.taskToBaseArm(P, 0), b1 = A.taskToBaseArm(P, 1);
+  const d = Math.hypot(b0[0]-b1[0], b0[1]-b1[1], b0[2]-b1[2]);
+  ok(d > 1, '同一个任务点在两条臂的 base 系里坐标不同（差 ' + d.toFixed(1) + ' mm）—— ' +
+     '这才叫"分别校核"', [b0.map(v=>+v.toFixed(1)), b1.map(v=>+v.toFixed(1))]);
+
+  /* 把两条臂的装配位设成一样时，换算结果应当一致
+     —— 反过来说明上面那个差异确实来自装配位，不是别的东西 */
+  const keep0 = A.ARMS[0].model.asm, keep1 = A.ARMS[1].model.asm;
+  A.ARMS[0].model.asm = { x: 7, y: 8, z: 9 };
+  A.ARMS[1].model.asm = { x: 7, y: 8, z: 9 };
+  const c0 = A.taskToBaseArm(P, 0), c1 = A.taskToBaseArm(P, 1);
+  const d2 = Math.hypot(c0[0]-c1[0], c0[1]-c1[1], c0[2]-c1[2]);
+  ok(d2 < 1e-9, '装配位相同时两条臂的换算一致（说明差异确实来自装配位）', d2);
+  /* 还原 */
+  A.ARMS[0].model.asm = keep0;
+  A.ARMS[1].model.asm = keep1;
+  A.setTestMap(MAP_SAVE);            // 还原 map
+}
+
+console.log('\n=== ⑨ IK 只动该臂的关节，另一条臂不被动 ===');
+{
+  A.applyConfig('dual_demo');
+  const R0 = A.armJointRange(0), R1 = A.armJointRange(1);
+  ok(R0.j0 === 0 && R1.j0 === A.ARMS[0].nJ, '两条臂的关节区间首尾相接', [R0, R1]);
+
+  /* 让第 1 条臂去做一次求解；第 0 条臂的关节值不应该被碰 */
+  A.Q = new Array(A.NJ).fill(0);
+  A.Q[0] = 33; A.Q[1] = 44;                 // 第 0 条臂的关节，设成特征值
+  const before = A.Q.slice(0, R0.nJ);
+  const q0Sub = A.curQArm(1);
+  const target = A.fkArm(q0Sub, 1).slice(-1)[0].t.slice();   // 第 1 条臂当前末端
+  const r = A.ikSolve6A(target, [0,0,1], q0Sub, 60, 2, 1);
+  ok(!!r, 'ikSolve6A 在第 1 条臂上能跑');
+  const after = A.Q.slice(0, R0.nJ);
+  ok(before.every((v, i) => v === after[i]),
+     '求解第 1 条臂之后，第 0 条臂的关节值没被改动',
+     [before, after]);
+
+  /* 该臂的限位只取该臂的 */
+  const l0 = A.qLimitsArm(0), l1 = A.qLimitsArm(1);
+  ok(l0.length === A.ARMS[0].nJ && l1.length === A.ARMS[1].nJ,
+     'qLimitsArm 按臂返回限位', [l0.length, l1.length]);
+  ok(A.curQArm(0).length === A.ARMS[0].nJ && A.curQArm(1).length === A.ARMS[1].nJ,
+     'curQArm 按臂返回当前关节角');
+}
+
+console.log('\n=== ⑩ 任务域按臂分别算（有规则时才跑）===');
+{
+  /* dual_demo 没有 rules，所以这里只验"函数存在且按臂调用不炸"；
+     真正的任务域数值由 tongji（单臂）那条路径覆盖。 */
+  ok(typeof A.analyzeTaskArm === 'function', 'analyzeTaskArm 存在（按臂算任务域）');
+  ok(typeof A.analyzeTask === 'function', 'analyzeTask 存在（逐臂汇总）');
+  A.applyConfig('tongji');
+  A.Q = new Array(A.NJ).fill(0);
+  /* ★ 无头环境不跑 computeFeasible()，ARMSTATS/VOX 是空的。
+     analyzeTaskArm 要用"这条臂自己的可达体素"，所以先算一遍采样并写回去。 */
+  const R = A.sampleReach(4000);
+  A.setArmStats(R.armStats);
+  A.setVOX(R.keys);
+  ok(A.ARMSTATS.length === 1 && A.ARMSTATS[0].keys && A.ARMSTATS[0].keys.size > 0,
+     'ARMSTATS 里带上了每条臂自己的可达体素（analyzeTaskArm 要用）',
+     A.ARMSTATS.length ? A.ARMSTATS[0].keys && A.ARMSTATS[0].keys.size : 0);
+  let err = '', res = null;
+  try { res = A.analyzeTaskArm(0); } catch (e) { err = e.message; }
+  ok(!err, '单臂时 analyzeTaskArm(0) 不抛异常', err);
+  ok(!!res && typeof res.hitRate === 'number' && typeof res.ikRate === 'number',
+     '它返回可达率/IK 率等数字（供逐臂汇总用）',
+     res ? { hit: +res.hitRate.toFixed(1), ik: +res.ikRate.toFixed(1) } : null);
+}
+
 console.log('\n' + '='.repeat(46));
 if (fail) { console.log('FAIL=' + fail + '  PASS=' + pass); process.exitCode = 1; }
 else console.log('全部通过：' + pass + ' 项');

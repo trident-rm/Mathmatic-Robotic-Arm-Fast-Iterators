@@ -251,7 +251,10 @@ function sampleReach(N){
       aRmax = Math.max(aRmax, Math.hypot(p[0],p[1],p[2]));
       aZmin = Math.min(aZmin, p[2]); aZmax = Math.max(aZmax, p[2]);
     }
-    return {name:(ARMS[a]||{}).name || ('臂'+a), n:P.length, voxels:kk.size,
+    /* keys = 这条臂自己的可达体素集合。
+       ★ 任务域校核要按臂判断"这个任务点落不落在这条臂的可达集里"，
+         所以每条臂必须带自己的 keys；原来只有全局 VOX（= 臂 0 的）。 */
+    return {name:(ARMS[a]||{}).name || ('臂'+a), n:P.length, voxels:kk.size, keys:kk,
             rmax:aRmax, zmin:aZmin, zmax:aZmax,
             cloud: P.filter((_, i) => i % step === 0)};
   });

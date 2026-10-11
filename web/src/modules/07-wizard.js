@@ -48,14 +48,19 @@ function wizDefaultLinks(n) {
 function wizReset() {
   WIZ.step = 0;
   WIZ.nArm = 1;
-  WIZ.arms = [{ name: '臂1', yaw: -90, links: wizDefaultLinks(3) }];
+  WIZ.arms = [{ name: '臂1', yaw: -90, asm: { x: 0, y: 0, z: 0 },
+                links: wizDefaultLinks(3) }];
   WIZ.asm = { x: -500, y: -200, z: 800 };
   WIZ.insertAxis = 'y';
   WIZ.gripAxis = 'x';
 }
 function wizEnsureArms() {
   while (WIZ.arms.length < WIZ.nArm) {
-    WIZ.arms.push({ name: '臂' + (WIZ.arms.length + 1), yaw: -90, links: wizDefaultLinks(3) });
+    /* 第二条臂默认放到车的另一侧 —— 这样"分别校核"才有意义 */
+    const k = WIZ.arms.length;
+    WIZ.arms.push({ name: '臂' + (k + 1), yaw: -90,
+                    asm: { x: 0, y: k === 1 ? -360 : 0, z: 0 },
+                    links: wizDefaultLinks(3) });
   }
   WIZ.arms.length = WIZ.nArm;
 }
@@ -82,7 +87,11 @@ function wizBuildArm(a) {
   /* 末端：固定在最后一段上的工具（长度后续可在模型链里改） */
   links.push({ name: 'tip', joint: 'tip_fix', type: 'fixed', posMode: 'parent',
                pos: [0, 0, 0], axes: ID_AXES, axis: '+Z', limits: null });
-  return { name: a.name || '臂', base: { xyz: [0, 0, 0], yaw: +a.yaw || 0 }, links };
+  const arm = { name: a.name || '臂', base: { xyz: [0, 0, 0], yaw: +a.yaw || 0 }, links };
+  /* ★ 这条臂自己的装配位（相对世界坐标系原点）。
+     任务域校核按它把任务点转到这条臂的 base 系 —— 每条臂各一份。 */
+  if (a.asm) arm.asm = { x: +a.asm.x || 0, y: +a.asm.y || 0, z: +a.asm.z || 0 };
+  return arm;
 }
 
 /* ---------------- 各步的渲染 ---------------- */
@@ -99,14 +108,23 @@ function wizStepHTML() {
       </div>`;
   }
   if (s === 1) {
+    const multi = WIZ.arms.length > 1;
     return `<h3>安装基准</h3>
-      <p class="sub">臂本体装在车上的朝向（绕竖直轴）。这决定整车系与臂基座系的夹角。</p>
+      <p class="sub">臂装在车上的朝向（绕竖直轴）与位置。${multi
+        ? '每条臂各一份 —— 两条臂分别校核的前提就是它们装的地方不一样。'
+        : ''}</p>
       ${WIZ.arms.map((a, i) => `
         <div class="segrow">
-          <div class="t">${WIZ.arms.length > 1 ? (a.name || ('臂' + (i + 1))) : '安装朝向'}</div>
+          <div class="t">${multi ? (a.name || ('臂' + (i + 1))) : '安装朝向与位置'}</div>
           <div class="f" style="grid-template-columns:auto 1fr">
             <label>base_yaw (°)</label>
             <input type="number" step="15" data-yaw="${i}" value="${a.yaw}">
+          </div>
+          <div class="f" style="grid-template-columns:auto 1fr 1fr 1fr;margin-top:5px">
+            <label title="这条臂的基座装在整车上的哪个位置（mm）">基座位置</label>
+            <input type="number" step="10" data-asm0="${i}" value="${(a.asm && a.asm.x) || 0}" title="x (mm)">
+            <input type="number" step="10" data-asm1="${i}" value="${(a.asm && a.asm.y) || 0}" title="y (mm)">
+            <input type="number" step="10" data-asm2="${i}" value="${(a.asm && a.asm.z) || 0}" title="z (mm)">
           </div>
         </div>`).join('')}`;
   }
@@ -188,6 +206,15 @@ function wizCollect() {
   document.querySelectorAll('[data-yaw]').forEach(el => {
     const i = +el.dataset.yaw; if (WIZ.arms[i]) WIZ.arms[i].yaw = +el.value || 0;
   });
+  /* 每条臂的基座位置 */
+  for (const k of ['0', '1', '2']) {
+    document.querySelectorAll('[data-asm' + k + ']').forEach(el => {
+      const i = +el.dataset['asm' + k];
+      if (!WIZ.arms[i]) return;
+      if (!WIZ.arms[i].asm) WIZ.arms[i].asm = { x: 0, y: 0, z: 0 };
+      WIZ.arms[i].asm[['x', 'y', 'z'][+k]] = +el.value || 0;
+    });
+  }
   document.querySelectorAll('[data-ln]').forEach(el => {
     const [ai, li] = el.dataset.ln.split(':').map(Number);
     if (WIZ.arms[ai] && WIZ.arms[ai].links[li]) WIZ.arms[ai].links[li].name = el.value;

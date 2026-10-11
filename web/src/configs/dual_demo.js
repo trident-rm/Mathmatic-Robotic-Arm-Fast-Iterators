@@ -28,6 +28,9 @@
       { /* ---- 左臂：装在车左前，朝前伸（yaw = -90）---- */
         name: '左臂',
         base: { xyz: [60, 180, 250], yaw: -90 },
+        /* 相对世界坐标系(OXYZ)原点的装配位 —— 每条臂各一份。
+           两条臂装的位置不同，"分别校核两次"才有意义。 */
+        asm: { x: 60, y: 180, z: 0 },
         links: [
           { name: 'base_link', joint: 'base_joint', type: 'revolute',
             posMode: 'origin', pos: [60, 180, 250], axes: ID, axis: '+Z', limits: null },
@@ -40,6 +43,7 @@
       { /* ---- 右臂：装在车右前，与左臂镜像（yaw = +90）---- */
         name: '右臂',
         base: { xyz: [-60, 180, 250], yaw: 90 },
+        asm: { x: -60, y: 180, z: 0 },
         links: [
           { name: 'base_link', joint: 'base_joint', type: 'revolute',
             posMode: 'origin', pos: [-60, 180, 250], axes: ID, axis: '+Z', limits: null },

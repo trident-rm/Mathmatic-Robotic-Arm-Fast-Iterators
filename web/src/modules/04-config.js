@@ -71,8 +71,25 @@ function mapObj(frame) {
 
   return {
     yaw: +frame.yaw || 0, baseH: h, taskMap: kind, phiDeg: TASKMAP_PHI[kind],
-    toBase: p => { const q = fwd([p[0], p[1], p[2] - h]); return [q[0], q[1], q[2]]; },
-    toTask: p => { const q = inv(p); return [q[0], q[1], q[2] + h]; },
+    /* off：装配臂在 OXYZ 下的【水平位置】({x,y})，可省略。
+       ★ 为什么高度不从这里来：高度一直是 baseH（frame 的一部分，=170），
+         这条约定从最早就是这样，改了会让所有历史结论变数。
+         所以这里只承担"多臂左右分开装"带来的水平偏移；
+         不传 off 时行为与以前【逐字相同】（只减 baseH）。
+       ★ 多臂必须按臂传 off —— 两条臂装的位置不同，
+         同一个任务点在各自 base 系里的坐标就不同。 */
+    toBase: (p, off) => {
+      const q = fwd([p[0] - (+(off && off.x) || 0),
+                     p[1] - (+(off && off.y) || 0),
+                     p[2] - h]);
+      return [q[0], q[1], q[2]];
+    },
+    toTask: (p, off) => {
+      const q = inv(p);
+      return [q[0] + (+(off && off.x) || 0),
+              q[1] + (+(off && off.y) || 0),
+              q[2] + h];
+    },
     dirToBase: d => fwd(d),
     dirToTask: d => inv(d),
     describe: () => kind + ' (Rz(' + TASKMAP_PHI[kind] + '°), 抬高 ' + h + 'mm)'
@@ -225,6 +242,34 @@ function normalizeArms(cfg) {
 /* 当前生效的所有臂（引擎的 buildChain 会调它） */
 function activeArms() {
   return (CONFIG && CONFIG.__arms) ? CONFIG.__arms : null;
+}
+
+/* ---------------- 每条臂自己的装配位 ----------------
+   多臂时两条臂装在车上的位置不同（一左一右），所以"它相对世界坐标系原点在哪"
+   是【每条臂各一份】。任务域校核按臂分别做 —— 这是"单臂三轴检验 × 2"的前提：
+   否则两条臂共用一个装配位，基座重合、可达集完全相同，
+   "分别校核两次"就退化成把同一个答案抄两遍。
+
+   取值优先级：arm.asm → 模型级 vehicle.asm → RULES.init（单臂老配置兜底）。 */
+function asmOfArm(a) {
+  a = a || 0;
+  const A = ARMS[a];
+  if (A && A.model && A.model.asm) {
+    const s = A.model.asm;
+    return { x: +s.x || 0, y: +s.y || 0, z: +s.z || 0 };
+  }
+  if (MODEL && MODEL.vehicle && MODEL.vehicle.asm) {
+    const s = MODEL.vehicle.asm;
+    return { x: +s.x || 0, y: +s.y || 0, z: +s.z || 0 };
+  }
+  const ini = (RULES && RULES.init) ? RULES.init : { x: 0, y: 0, z: 0 };
+  return { x: +ini.x || 0, y: +ini.y || 0, z: +ini.z || 0 };
+}
+function asmAllArms() {
+  const n = (typeof armCount === 'function') ? armCount() : 1;
+  const out = [];
+  for (let a = 0; a < n; a++) out.push(asmOfArm(a));
+  return out;
 }
 
 /* ---------------- 启动时把默认配置装上 ----------------

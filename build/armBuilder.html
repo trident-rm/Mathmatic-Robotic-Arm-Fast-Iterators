@@ -575,7 +575,10 @@ function sampleReach(N){
       aRmax = Math.max(aRmax, Math.hypot(p[0],p[1],p[2]));
       aZmin = Math.min(aZmin, p[2]); aZmax = Math.max(aZmax, p[2]);
     }
-    return {name:(ARMS[a]||{}).name || ('臂'+a), n:P.length, voxels:kk.size,
+    /* keys = 这条臂自己的可达体素集合。
+       ★ 任务域校核要按臂判断"这个任务点落不落在这条臂的可达集里"，
+         所以每条臂必须带自己的 keys；原来只有全局 VOX（= 臂 0 的）。 */
+    return {name:(ARMS[a]||{}).name || ('臂'+a), n:P.length, voxels:kk.size, keys:kk,
             rmax:aRmax, zmin:aZmin, zmax:aZmax,
             cloud: P.filter((_, i) => i % step === 0)};
   });
@@ -1183,8 +1186,7 @@ function drawJointArcs(g, S, F, label){
 /* ---------------- 任务域数据（只针对三级；位置与难度等级无关） ---------------- */
 /* 体素邻域判定：可达集是随机采样出来的，空格子可能只是没采到，
    所以查 ±1 邻域（27 格）任一命中即算可达，避免把真空隙误判成不可达 */
-function vkeyN(p, vs){
-  const i=Math.floor(p[0]/vs), j=Math.floor(p[1]/vs), k=Math.floor(p[2]/vs);
+function vkeyN(p, vs){  const i=Math.floor(p[0]/vs), j=Math.floor(p[1]/vs), k=Math.floor(p[2]/vs);
   for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++) for(let c=-1;c<=1;c++)
     if(VOX.has((i+a)+','+(j+b)+','+(k+c))) return true;
   return false;
@@ -1204,30 +1206,168 @@ function bestOfSeeds(Eb, eB, q0, nSeed){
   }
   return okBest || best;
 }
-function analyzeTask(){
-  const el = document.getElementById('dataBody');
-  if(!MODEL){ el.textContent='载入模型后显示…'; return; }
-  /* ★ 没有竞赛规则 / 没有 map 的配置（向导新建出来的就是这种）要在这里让开。
-     以前这里直接读 RULES.levels[3]，配置层允许 rules:null 之后就会抛
-     "Cannot read properties of undefined" —— 而且是在 updateAll 里抛的，
-     整个界面会停在半截。 */
-  if(!RULES || !RULES.levels || !RULES.levels[3] || !MAP){
-    el.innerHTML = '<div class="sect">任务域校核</div>' +
-      '<div class="one" style="color:#5d6b88;line-height:1.8">' +
-      '当前构型没有绑定竞赛规则，所以这里只显示通用几何量。<br>' +
-      '『可达域』部分照常可用；任务域（三级位姿范围）需要一个 <b>rules</b> 配置。' +
-      '</div>';
-    return;
+/* ==================================================================
+   按臂分别校核（"单臂三轴检验 × N"）
+
+   ★ 为什么要这一层：
+     原来的任务域校核只算【第 0 条臂】—— 可达体素用 VOX（= 臂 0 的）、
+     IK 用 fkAll(q)（默认臂 0）、装配位用全局 RULES.init。
+     多臂时这套只回答了"第一条臂行不行"。
+     而且如果两条臂共用同一个装配位，基座重合、可达集完全相同，
+     "分别校核两次"就退化成把同一份答案抄两遍 —— 没有意义。
+
+   ★ 现在的做法：
+     · 每条臂有自己的装配位（arm.asm），任务点按【该臂的装配位】转到它自己的 base 系
+     · 可达体素也按臂取（ARMSTATS[a].keys）
+     · IK 只动【该臂自己的关节】，另一条臂的关节保持不动
+       —— 这就是"两只手各做一次"，不是"两只手一起装配一个"
+
+   ★ 下面几个包装是【逐行对照】ikPos / ikSolve6 / bestOfSeeds 写的，
+     只替换了三处：
+        fkAll(q)  -> fkArm(q, a)      只在那条臂上算正解
+        qLimits() -> qLimitsArm(a)    只取那条臂的限位
+        q0        -> q0Sub            只含那条臂的关节
+     常数（lam=40 / 0.98 / 0.3 / 0.5 / 0.2 / W_ORI）一个字都没改。
+     （第一版是凭记忆手抄的，把 lam 衰减和 break 阈值都抄错了，故此处特别标注。）
+==================================================================================== */
+function armJointRange(a){
+  const A = ARMS[a];
+  return A ? { j0: A.j0, nJ: A.nJ } : { j0: 0, nJ: NJ };
+}
+/* 任务点 -> 第 a 条臂的 base 系（用该臂自己的装配位）。
+   ★ 注意这里必须直接调 MAP.toBase(p, off)：
+     taskToBase 是"只吃一个参数"的转发壳（本地映射用），
+     把 off 传给它会【被丢掉】，结果是两条臂算出同一个坐标 —— 踩过。 */
+function taskToBaseArm(p, a){
+  if(!MAP) return null;
+  const off = (typeof asmOfArm === 'function') ? asmOfArm(a) : null;
+  return MAP.toBase(p, off);
+}
+/* 方向向量不含平移，与装在哪条臂无关 */
+function dirToBaseArm(d){ return dirToBase(d); }
+
+/* 把"只含该臂关节的子向量"塞回全局 q（其余关节保持当前值不动） */
+function withArmQ(qGlobal, qSub, a){
+  const R = armJointRange(a);
+  const out = qGlobal.slice();
+  for (let k = 0; k < R.nJ; k++) out[R.j0 + k] = qSub[k];
+  return out;
+}
+function qLimitsArm(a){
+  const R = armJointRange(a);
+  return qLimits().slice(R.j0, R.j0 + R.nJ);
+}
+function curQArm(a){
+  const R = armJointRange(a);
+  return Q.slice(R.j0, R.j0 + R.nJ);
+}
+function fkArm(qSub, a){ return fkAllArm(withArmQ(Q, qSub, a), a); }
+
+/* ---- ikPos 的按臂版 ---- */
+function ikPosA(target, q0Sub, iters, a){
+  let q = q0Sub.slice(), lam = 40;
+  const lim = qLimitsArm(a);
+  for(let it=0; it<iters; it++){
+    const F = fkArm(q, a), pe = F[F.length-1].t;
+    const ep = subv(target, pe);
+    if(Math.hypot(ep[0],ep[1],ep[2]) < 0.5) break;
+    const J = [];
+    for(let i=1;i<F.length;i++){ const f=F[i]; if(!f.movable) continue;
+      const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+      const ax=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+      J.push(cross(ax, subv(pe,f.t))); }
+    const A2=[[0,0,0],[0,0,0],[0,0,0]];
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++){ let s=0; for(const jc of J) s+=jc[i]*jc[j];
+      A2[i][j]=s+(i===j?lam*lam:0); }
+    const y = solveN(A2, ep);
+    for(let k=0;k<J.length;k++){ let d=0; for(let i=0;i<3;i++) d+=J[k][i]*y[i];
+      d = Math.max(-0.3, Math.min(0.3, d)) / D2R;
+      q[k]=Math.min(Math.max(q[k]+d,lim[k][0]),lim[k][1]); }
+    lam *= 0.98;
   }
-  if(!VOX || !VOX.size){ el.textContent='可达集为空'; return; }
+  const F = fkArm(q, a);
+  const e = Math.hypot(...subv(target, F[F.length-1].t));
+  return {q, ok:e<1.5, e};
+}
+
+/* ---- ikSolve6 的按臂版 ---- */
+function ikSolve6A(targetP, targetZdir, q0Sub, iters, axIdx, a){
+  const ai = (axIdx === undefined) ? 2 : axIdx;
+  const seed = ikPosA(targetP, q0Sub, 90, a);
+  let q = seed.q.slice(), lam = 40;
+  const lim = qLimitsArm(a), tz = unit(targetZdir);
+  let bestQ = q.slice(), bestF = Infinity, bestE = Infinity, bestA = 0;
+  for(let it=0; it<(iters||200); it++){
+    const F = fkArm(q, a), ee = F[F.length-1];
+    const ep = subv(targetP, ee.t);
+    const zc = [ee.R[0][ai], ee.R[1][ai], ee.R[2][ai]];
+    const ax = cross(zc, tz), s = Math.hypot(ax[0],ax[1],ax[2]);
+    const c = zc[0]*tz[0]+zc[1]*tz[1]+zc[2]*tz[2];
+    let eo, ang;
+    if(s < 1e-8){
+      if(c > 0){ eo=[0,0,0]; ang=0; }
+      else { let p2 = Math.abs(zc[0])<0.9 ? cross(zc,[1,0,0]) : cross(zc,[0,1,0]);
+             eo = mulS(unit(p2), Math.PI*W_ORI); ang = Math.PI; }
+    } else { ang = Math.atan2(s,c); eo = mulS(mulS(ax,1/s), ang*W_ORI); }
+    const dp = Math.hypot(ep[0],ep[1],ep[2]);
+    const rr = Math.hypot(dp, W_ORI*ang);
+    if(rr < bestF){ bestF = rr; bestQ = q.slice(); bestE = dp; bestA = ang; }
+    if(dp < 2 && ang < 0.15) return {q, ok:true, e:dp, ang};
+    const wO = 1;
+    const eoW = mulS(eo, wO);
+    const J = [];
+    for(let i=1;i<F.length;i++){
+      const f=F[i]; if(!f.movable) continue;
+      const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+      const ax2=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+      J.push(cross(ax2, subv(ee.t,f.t)).concat(mulS(ax2, W_ORI*wO)));
+    }
+    const Am=[]; for(let i=0;i<6;i++) Am.push([0,0,0,0,0,0]);
+    for(let i=0;i<6;i++)for(let j=0;j<6;j++){ let s2=0; for(const jc of J) s2+=jc[i]*jc[j];
+      Am[i][j]=s2+(i===j?lam*lam:0); }
+    const y = solveN(Am, ep.concat(eoW));
+    for(let k=0;k<J.length;k++){ let d=0; for(let i=0;i<6;i++) d+=J[k][i]*y[i];
+      d = Math.max(-0.2, Math.min(0.2, d)) / D2R;
+      q[k]=Math.min(Math.max(q[k]+d,lim[k][0]),lim[k][1]); }
+    lam *= 0.985;
+  }
+  const F = fkArm(bestQ, a), ee = F[F.length-1];
+  const zc = [ee.R[0][ai], ee.R[1][ai], ee.R[2][ai]];
+  const angOff = Math.acos(Math.max(-1,Math.min(1, zc[0]*tz[0]+zc[1]*tz[1]+zc[2]*tz[2])));
+  return { q: bestQ, ok: (bestE < 3 && angOff < 0.2), e: bestE, ang: angOff };
+}
+
+/* ---- bestOfSeeds 的按臂版 ---- */
+function bestOfSeedsA(Eb, eB, q0Sub, nSeed, a){
+  const lim = qLimitsArm(a);
+  let best = null, okBest = null, bestSc = Infinity;
+  for(let s=0; s<nSeed; s++){
+    const seed = s===0 ? q0Sub : lim.map(([lo,hi]) => lo + Math.random()*(hi-lo));
+    const r = ikSolve6A(Eb, mulS(eB,-1), seed, 200, 1, a);
+    if(r.ok && !okBest) okBest = r;
+    const sc = Math.hypot(r.e, W_ORI*(r.ang||0));
+    if(sc < bestSc){ bestSc = sc; best = r; }
+    if(okBest) break;
+  }
+  return okBest || best;
+}
+
+function analyzeTaskArm(ARM){
+  /* ★ 这个函数【只算不写 DOM】—— 返回数字与面板 HTML，由 renderTaskPanel 渲染。
+     多臂时 analyzeTask 会为每条臂调一次。前提条件不满足时返回 null，
+     调用方（analyzeTask）已经做过同样的守卫。 */
+  const ARMV = (ARMSTATS[ARM] && ARMSTATS[ARM].keys) ? ARMSTATS[ARM].keys : VOX;
+  if(!MODEL) return null;
+  if(!RULES || !RULES.levels || !RULES.levels[3] || !MAP) return null;
+  if(!ARMV || !ARMV.size) return null;
   const L = RULES.levels[3], vs = 50, N = 6000;
   let hit=0, hit0=0; const zb=new Map(); const miss=[];
   for(let i=0;i<N;i++){
     const x=rnd(L.x), y=rnd(L.y), z=rnd(L.z);
-    const p=taskToBase([x,y,z]);
+    const p=taskToBaseArm([x,y,z], ARM);
     const ok = vkeyN(p,vs);
     if(ok) hit++;
-    if(VOX.has(vkey(p,vs))) hit0++;
+    if(ARMV.has(vkey(p,vs))) hit0++;
     if(!ok && miss.length<400) miss.push(p);
     const k=Math.floor(z/100)*100;
     if(!zb.has(k)) zb.set(k,[0,0]);
@@ -1251,18 +1391,21 @@ function analyzeTask(){
   let ikOK = 0, ikN = 320, ikMiss = 0, ikBest = 0, ikPosOK = 0, ikOKplus = 0;
   const IK_START = 12, IK_ITER = 300;
   const ikErr = [];
-  const q0 = Q.slice();
+  /* ★ q0 必须是【这条臂】的关节子向量。
+     原来写 Q.slice()（全链），后面 q0.map((v,i)=> qLimitsArm(ARM)[i])
+     一越界就抛 undefined[0] —— 多臂时必崩。 */
+  const q0 = curQArm(ARM);
   for(let i=0;i<ikN;i++){
     const P = {x:rnd(L.x), y:rnd(L.y), z:rnd(L.z), th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)};
-    const Eb = taskToBase([P.x,P.y,P.z]);
-    const eB = dirToBase(coreFrame(P).e);
+    const Eb = taskToBaseArm([P.x,P.y,P.z], ARM);
+    const eB = dirToBaseArm(coreFrame(P).e);
     // 对照：只解位置。★ 固定 3 起点、独立跑，不跟下面主循环的"命中即停"耦合
     //   （耦合过：主循环一命中就 break，这个对照项就退化成"只有 1 次机会"，数字会莫名变低）
     let posOnly = 0;
     for(let s=0;s<3;s++){
-      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimits()[i];
+      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimitsArm(ARM)[i];
         return lim[0]+Math.random()*(lim[1]-lim[0]); });
-      if(ikPos(Eb, seed, 140).e < 5) posOnly++;
+      if(ikPosA(Eb, seed, 140, ARM).e < 5) posOnly++;
     }
     if(posOnly) ikPosOK++;
     /* 主：多起点（零位 + 11 个随机种子），插入姿态 夹爪 y ∥ Q 轴。
@@ -1270,16 +1413,16 @@ function analyzeTask(){
          盖住真正 ok 的解，凭空少算几个百分点（这个坑我踩过）。 */
     let best = null, okBest = null, bestSc = Infinity;
     for(let s=0;s<IK_START;s++){
-      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimits()[i];
+      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimitsArm(ARM)[i];
         return lim[0]+Math.random()*(lim[1]-lim[0]); });
-      const r = ikSolve6(Eb, mulS(eB,-1), seed, IK_ITER, 1);
+      const r = ikSolve6A(Eb, mulS(eB,-1), seed, IK_ITER, 1, ARM);
       if(r.ok && !okBest) okBest = r;
       const sc = Math.hypot(r.e, W_ORI*(r.ang||0));            // 全失败时留真残差最小的那个做诊断
       if(sc < bestSc){ bestSc = sc; best = r; }
       if(okBest) break;
     }
     best = okBest || best;
-    if(ikSolve6(Eb, mulS(eB, +1), q0, IK_ITER, 1).ok) ikOKplus++;   // 夹爪 y = +e⃗（单起点对照）
+    if(ikSolve6A(Eb, mulS(eB, +1), q0, IK_ITER, 1, ARM).ok) ikOKplus++;   // 夹爪 y = +e⃗（单起点对照）
     ikErr.push(best.e);
     if(best.ok) ikOK++;
     else if(best.e > 40) ikMiss++;
@@ -1291,64 +1434,77 @@ function analyzeTask(){
      ① 统计失败位姿里最优解顶到限位的关节（顶死 = 放宽限位就能救）
      ② 把限位整体放宽 ±25° 再解一遍，看可解率能涨到多少 */
   let diagN = 0, diagSaved = 0;
-  const hitLim = new Array(NJ).fill(0);
+  /* ★ 只统计【这条臂】的关节：hitLim / lim0 / r0.q 都是按臂局部的。
+     以前写 NJ（= 全部关节），多臂时会越界读 lim0[k] -> undefined[0]，
+     浏览器里直接抛。这是按臂改造里唯一的越界点。 */
+  const nJA = qLimitsArm(ARM).length;
+  const hitLim = new Array(nJA).fill(0);
   const base = ikOK / ikN;
   for(let i=0;i<140;i++){
     const P = {x:rnd(L.x), y:rnd(L.y), z:rnd(L.z), th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)};
-    const Eb = taskToBase([P.x,P.y,P.z]), eB = dirToBase(coreFrame(P).e);
-    const r0 = bestOfSeeds(Eb, eB, q0, 3);
+    const Eb = taskToBaseArm([P.x,P.y,P.z], ARM), eB = dirToBaseArm(coreFrame(P).e);
+    const r0 = bestOfSeedsA(Eb, eB, q0, 3, ARM);
     if(r0.ok) continue;
     diagN++;
-    const lim0 = qLimits();
-    for(let k=0;k<NJ;k++){
+    const lim0 = qLimitsArm(ARM);
+    for(let k=0;k<nJA;k++){
       const lo=lim0[k][0], hi=lim0[k][1];
       if(Math.abs(r0.q[k]-lo) < 4 || Math.abs(r0.q[k]-hi) < 4) hitLim[k]++;
     }
     LIM_WIDEN = 25;                                  // 放宽限位再试
-    const r1 = bestOfSeeds(Eb, eB, q0, 3);
+    const r1 = bestOfSeedsA(Eb, eB, q0, 3, ARM);
     LIM_WIDEN = 0;
     if(r1.ok) diagSaved++;
   }
-  const limNames = CHAIN.filter(c=>c.movable).map(c=>c.joint);
+  /* 关节名也按臂取（原来是全链的，多臂时名字与 hitLim 对不上） */
+  const RGA = armJointRange(ARM);
+  const limNames = CHAIN.slice(RGA.j0, RGA.j0 + RGA.nJ)
+                        .filter(c=>c.movable).map(c=>c.joint);
   const hitTxt = limNames.map((n,i)=> hitLim[i] ? (n+' '+Math.round(100*hitLim[i]/Math.max(diagN,1))+'%') : '')
                         .filter(Boolean).join(' · ') || '无';
   const widenRate = diagN ? (ikOK + diagSaved) / ikN : base;
   /* ---- 安装朝向扫描：哪个 yaw 的可解率最高（这是提高可解率最有效的杠杆） ---- */
   let scanBest = null, scanCurve = [];
   if(MODEL){
-    const yaw0 = MODEL.base.yaw, NS = 60, poses = [];
+    /* ★ 只扫【这条臂】的安装朝向，扫完复原。
+       原来改的是 MODEL.base.yaw（= 第 0 条臂），多臂时等于只动第一条。 */
+    const tgt = (typeof ARMS !== 'undefined' && ARMS[ARM]) ? ARMS[ARM].model : MODEL;
+    const yaw0 = tgt.base.yaw, NS = 60, poses = [];
     for(let i=0;i<NS;i++) poses.push({x:rnd(L.x), y:rnd(L.y), z:rnd(L.z),
                                       th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)});
     for(let y=-180; y<180; y+=45){
-      MODEL.base.yaw = y;
+      tgt.base.yaw = y;
       let ok = 0;
       for(const P of poses){
-        const Eb = taskToBase([P.x,P.y,P.z]), eB = dirToBase(coreFrame(P).e);
-        if(bestOfSeeds(Eb, eB, q0, 2).ok) ok++;
+        const Eb = taskToBaseArm([P.x,P.y,P.z], ARM), eB = dirToBaseArm(coreFrame(P).e);
+        if(bestOfSeedsA(Eb, eB, q0, 2, ARM).ok) ok++;
       }
       scanCurve.push([y, ok/NS]);
       if(!scanBest || ok/NS > scanBest[1]) scanBest = [y, ok/NS];
     }
-    MODEL.base.yaw = yaw0;                      // 恢复原值
+    tgt.base.yaw = yaw0;                      // 恢复原值
   }
   // ---- 零位朝向校核：末端(最后一个关节)的 z 轴 与 Q 轴正方向 e⃗ 的关系 ----
   // 理想（正面装配）= 两者【相对】(≈180°)；若 ≈0° 说明同向，臂得先绕到反面去，
   // 解算自然会出现"抽象行为"。可把臂的安装 yaw 改 180° 或改 RULES 里的映射来翻面。
-  const Fz = fkAll(new Array(NJ).fill(0));
+  const Fz = fkArm(new Array(qLimitsArm(ARM).length).fill(0));
   const eeZ = Fz[Fz.length-1];
   const zAx = [eeZ.R[0][2], eeZ.R[1][2], eeZ.R[2][2]];
   const Ptyp = {x:L.x[0], y:(L.y[0]+L.y[1])/2, z:(L.z[0]+L.z[1])/2, th:0, ph:90, al:0};
-  const eTyp = dirToBase(coreFrame(Ptyp).e);
+  const eTyp = dirToBaseArm(coreFrame(Ptyp).e);
   const cosZ = Math.max(-1, Math.min(1, dot3(zAx, eTyp)));
   const angZ = Math.acos(cosZ)*180/Math.PI;
   const facing = angZ > 135 ? '正对（正面装配 ✓）'
                : (angZ < 45 ? '同向（需绕到反面 ✗）' : '斜交');
   // ---- IK 最小自检：把"当前末端位置"偏移 20mm 当目标，IK 应当立刻收回 ----
-  const eeNow = fkAll(Q)[CHAIN.length].t;
+  /* fkArm 要的是【该臂的关节子向量】；索引用 F.length-1（该臂末端）。
+     原来传 Q（全链）+ CHAIN.length（全链长度）—— 多臂时既越界又算错。 */
+  const _F0 = fkArm(q0, ARM);
+  const eeNow = _F0[_F0.length-1].t;
   const selfT = [eeNow[0]+20, eeNow[1], eeNow[2]];
-  const traj = [1,2,5,20,80,300].map(k => ikPos(selfT, Q.slice(), k).e.toFixed(1)).join(' → ');
+  const traj = [1,2,5,20,80,300].map(k => ikPosA(selfT, q0, k, ARM).e.toFixed(1)).join(' → ');
   // 诊断：雅可比各列模长（正常应是几百 mm 量级）
-  const Fd = fkAll(Q), ped = Fd[Fd.length-1].t, colMag = [];
+  const Fd = fkArm(q0, ARM), ped = Fd[Fd.length-1].t, colMag = [];
   for(let i=1;i<Fd.length;i++){ const f=Fd[i]; if(!f.movable) continue;
     const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
     const a=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
@@ -1368,9 +1524,10 @@ function analyzeTask(){
   const dq1 = J1.map(j => (j[0]*y1[0]+j[1]*y1[1]+j[2]*y1[2]));
   const stepInfo = '单步：|e|=' + Math.hypot(...e1).toFixed(1) + ' |y|=' +
       Math.hypot(...y1).toExponential(2) + ' Δq(rad)=' + dq1.map(v=>v.toExponential(2)).join(', ');
-  const selfR = ikPos(selfT, Q.slice(), 80);
-  const selfD = Math.hypot(...subv(selfT, fkAll(selfR.q)[CHAIN.length].t));
-  const selfA = ikSolve6(selfT, [0,0,1], Q.slice(), 120);
+  const selfR = ikPosA(selfT, q0, 80, ARM);
+  const _Fs = fkArm(selfR.q, ARM);
+  const selfD = Math.hypot(...subv(selfT, _Fs[_Fs.length-1].t));
+  const selfA = ikSolve6A(selfT, [0,0,1], q0, 120, ARM);
   let rows='';
   [...zb.keys()].sort((a,b)=>a-b).forEach(k=>{
     const b=zb.get(k), r=pct(b[1],b[0]);
@@ -1378,7 +1535,9 @@ function analyzeTask(){
     rows += `<tr><td>z ${k}~${k+100}</td><td class="num">${b[0]}</td>
              <td class="num ${cls}">${r.toFixed(1)}%</td></tr>`;
   });
-  PANEL_REST = `
+  /* ★ 只算不写 DOM：把面板 HTML 与关键数字一起返回。
+     多臂时 analyzeTask 会为每条臂调一次，再由 renderTaskPanel 按选择渲染。 */
+  const html = `
     <div class="sect">任务域（硬编码 · 规则手册表5-10）</div>
     <table><tr><th>难度</th><th>x</th><th>y</th><th>z</th><th>θ/φ/α</th></tr>
       ${[1,2,3].map(i=>{const v=RULES.levels[i];
@@ -1428,7 +1587,75 @@ function analyzeTask(){
 
     <div class="one" style="margin-top:10px;color:#5d6b88">
       说明与用法见 README.md</div>`;
-  el.innerHTML = (typeof sizePanelHTML === 'function' ? sizePanelHTML() : '') + PANEL_REST;
+  return { arm: ARM, html,
+           hitRate: pct(hit,N), hit0Rate: pct(hit0,N),
+           ikRate: pct(ikOK,ikN), ikPosRate: pct(ikPosOK,ikN),
+           asm: (typeof asmOfArm === 'function') ? asmOfArm(ARM) : null,
+           name: (typeof ARMS !== 'undefined' && ARMS[ARM]) ? (ARMS[ARM].name || ('臂'+ARM)) : '臂0' };
+}
+
+/* ==================================================================
+   analyzeTask —— 逐臂汇总
+
+   单臂时行为与以前一致（就是 analyzeTaskArm(0)）。
+   多臂时【每条臂各做一次完整校核】，界面加一个臂选择器切换查看。
+   这就是"两只手都做一次"；不做"两只手一起装配一个"
+   （那需要多目标 IK，不在本工具范围内）。
+==================================================================================== */
+
+/* ---------------- 面板渲染（含多臂选择器） ---------------- */
+function renderTaskPanel(el){
+  if(!el) return;
+  const n = TASK_BY_ARM.length;
+  const cur = TASK_BY_ARM[TASK_ARM];
+  if(!cur){ el.textContent = '第 ' + (TASK_ARM + 1) + ' 条臂算不出来'; return; }
+  let head = '';
+  if(n > 1){
+    head = '<div class="sect">按臂分别校核（' + n + ' 条臂各做一次）</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">' +
+      TASK_BY_ARM.map((r, a) => {
+        if(!r) return '';
+        const on = a === TASK_ARM;
+        return '<button data-taskarm="' + a + '"' + (on ? ' class="primary"' : '') +
+               ' title="查看「' + r.name + '」的任务域结果">' + r.name +
+               ' · 可达 ' + r.hitRate.toFixed(0) + '%' +
+               ' · IK ' + r.ikRate.toFixed(0) + '%</button>';
+      }).join('') + '</div>' +
+      '<div style="color:#5d6b88;font-size:10.5px;margin-bottom:6px">' +
+      '每条臂按【自己的装配位】单独校核；两条臂不联动、不做协同装配。' +
+      '当前查看：<b>' + cur.name + '</b>（装配位 ' +
+      (cur.asm ? (cur.asm.x + ', ' + cur.asm.y + ', ' + cur.asm.z) : '-') + '）</div>';
+  }
+  el.innerHTML = head + (typeof sizePanelHTML === 'function' ? sizePanelHTML() : '') + cur.html;
+  /* 选择器接线 */
+  el.querySelectorAll('[data-taskarm]').forEach(b => {
+    b.onclick = () => { TASK_ARM = +b.dataset.taskarm; renderTaskPanel(el); };
+  });
+}
+
+let TASK_ARM = 0;               // 当前查看第几条臂的任务域结果
+let TASK_BY_ARM = [];
+function analyzeTask(){
+  const el = document.getElementById('dataBody');
+  if(!MODEL){ el.textContent='载入模型后显示…'; return; }
+  if(!RULES || !RULES.levels || !RULES.levels[3] || !MAP){
+    el.innerHTML = '<div class="sect">任务域校核</div>' +
+      '<div class="one" style="color:#5d6b88;line-height:1.8">' +
+      '当前构型没有绑定竞赛规则，所以这里只显示通用几何量。<br>' +
+      '『可达域』部分照常可用；任务域（三级位姿范围）需要一个 <b>rules</b> 配置。' +
+      '</div>';
+    return;
+  }
+  if(!VOX || !VOX.size){ el.textContent='可达集为空'; return; }
+  const n = (typeof armCount === 'function') ? armCount() : 1;
+  if(TASK_ARM >= n) TASK_ARM = 0;
+  TASK_BY_ARM = [];
+  for(let a=0; a<n; a++){
+    let r = null;
+    try { r = analyzeTaskArm(a); } catch(e){ if(a===0) throw e; }
+    TASK_BY_ARM.push(r);
+  }
+  renderTaskPanel(el);
 }
 
 /* ---------------- 数值 IK（阻尼最小二乘：位置 + 末端 z 轴对齐） ----------------
@@ -2448,14 +2675,19 @@ function wizDefaultLinks(n) {
 function wizReset() {
   WIZ.step = 0;
   WIZ.nArm = 1;
-  WIZ.arms = [{ name: '臂1', yaw: -90, links: wizDefaultLinks(3) }];
+  WIZ.arms = [{ name: '臂1', yaw: -90, asm: { x: 0, y: 0, z: 0 },
+                links: wizDefaultLinks(3) }];
   WIZ.asm = { x: -500, y: -200, z: 800 };
   WIZ.insertAxis = 'y';
   WIZ.gripAxis = 'x';
 }
 function wizEnsureArms() {
   while (WIZ.arms.length < WIZ.nArm) {
-    WIZ.arms.push({ name: '臂' + (WIZ.arms.length + 1), yaw: -90, links: wizDefaultLinks(3) });
+    /* 第二条臂默认放到车的另一侧 —— 这样"分别校核"才有意义 */
+    const k = WIZ.arms.length;
+    WIZ.arms.push({ name: '臂' + (k + 1), yaw: -90,
+                    asm: { x: 0, y: k === 1 ? -360 : 0, z: 0 },
+                    links: wizDefaultLinks(3) });
   }
   WIZ.arms.length = WIZ.nArm;
 }
@@ -2482,7 +2714,11 @@ function wizBuildArm(a) {
   /* 末端：固定在最后一段上的工具（长度后续可在模型链里改） */
   links.push({ name: 'tip', joint: 'tip_fix', type: 'fixed', posMode: 'parent',
                pos: [0, 0, 0], axes: ID_AXES, axis: '+Z', limits: null });
-  return { name: a.name || '臂', base: { xyz: [0, 0, 0], yaw: +a.yaw || 0 }, links };
+  const arm = { name: a.name || '臂', base: { xyz: [0, 0, 0], yaw: +a.yaw || 0 }, links };
+  /* ★ 这条臂自己的装配位（相对世界坐标系原点）。
+     任务域校核按它把任务点转到这条臂的 base 系 —— 每条臂各一份。 */
+  if (a.asm) arm.asm = { x: +a.asm.x || 0, y: +a.asm.y || 0, z: +a.asm.z || 0 };
+  return arm;
 }
 
 /* ---------------- 各步的渲染 ---------------- */
@@ -2499,14 +2735,23 @@ function wizStepHTML() {
       </div>`;
   }
   if (s === 1) {
+    const multi = WIZ.arms.length > 1;
     return `<h3>安装基准</h3>
-      <p class="sub">臂本体装在车上的朝向（绕竖直轴）。这决定整车系与臂基座系的夹角。</p>
+      <p class="sub">臂装在车上的朝向（绕竖直轴）与位置。${multi
+        ? '每条臂各一份 —— 两条臂分别校核的前提就是它们装的地方不一样。'
+        : ''}</p>
       ${WIZ.arms.map((a, i) => `
         <div class="segrow">
-          <div class="t">${WIZ.arms.length > 1 ? (a.name || ('臂' + (i + 1))) : '安装朝向'}</div>
+          <div class="t">${multi ? (a.name || ('臂' + (i + 1))) : '安装朝向与位置'}</div>
           <div class="f" style="grid-template-columns:auto 1fr">
             <label>base_yaw (°)</label>
             <input type="number" step="15" data-yaw="${i}" value="${a.yaw}">
+          </div>
+          <div class="f" style="grid-template-columns:auto 1fr 1fr 1fr;margin-top:5px">
+            <label title="这条臂的基座装在整车上的哪个位置（mm）">基座位置</label>
+            <input type="number" step="10" data-asm0="${i}" value="${(a.asm && a.asm.x) || 0}" title="x (mm)">
+            <input type="number" step="10" data-asm1="${i}" value="${(a.asm && a.asm.y) || 0}" title="y (mm)">
+            <input type="number" step="10" data-asm2="${i}" value="${(a.asm && a.asm.z) || 0}" title="z (mm)">
           </div>
         </div>`).join('')}`;
   }
@@ -2588,6 +2833,15 @@ function wizCollect() {
   document.querySelectorAll('[data-yaw]').forEach(el => {
     const i = +el.dataset.yaw; if (WIZ.arms[i]) WIZ.arms[i].yaw = +el.value || 0;
   });
+  /* 每条臂的基座位置 */
+  for (const k of ['0', '1', '2']) {
+    document.querySelectorAll('[data-asm' + k + ']').forEach(el => {
+      const i = +el.dataset['asm' + k];
+      if (!WIZ.arms[i]) return;
+      if (!WIZ.arms[i].asm) WIZ.arms[i].asm = { x: 0, y: 0, z: 0 };
+      WIZ.arms[i].asm[['x', 'y', 'z'][+k]] = +el.value || 0;
+    });
+  }
   document.querySelectorAll('[data-ln]').forEach(el => {
     const [ai, li] = el.dataset.ln.split(':').map(Number);
     if (WIZ.arms[ai] && WIZ.arms[ai].links[li]) WIZ.arms[ai].links[li].name = el.value;
@@ -2853,8 +3107,25 @@ function mapObj(frame) {
 
   return {
     yaw: +frame.yaw || 0, baseH: h, taskMap: kind, phiDeg: TASKMAP_PHI[kind],
-    toBase: p => { const q = fwd([p[0], p[1], p[2] - h]); return [q[0], q[1], q[2]]; },
-    toTask: p => { const q = inv(p); return [q[0], q[1], q[2] + h]; },
+    /* off：装配臂在 OXYZ 下的【水平位置】({x,y})，可省略。
+       ★ 为什么高度不从这里来：高度一直是 baseH（frame 的一部分，=170），
+         这条约定从最早就是这样，改了会让所有历史结论变数。
+         所以这里只承担"多臂左右分开装"带来的水平偏移；
+         不传 off 时行为与以前【逐字相同】（只减 baseH）。
+       ★ 多臂必须按臂传 off —— 两条臂装的位置不同，
+         同一个任务点在各自 base 系里的坐标就不同。 */
+    toBase: (p, off) => {
+      const q = fwd([p[0] - (+(off && off.x) || 0),
+                     p[1] - (+(off && off.y) || 0),
+                     p[2] - h]);
+      return [q[0], q[1], q[2]];
+    },
+    toTask: (p, off) => {
+      const q = inv(p);
+      return [q[0] + (+(off && off.x) || 0),
+              q[1] + (+(off && off.y) || 0),
+              q[2] + h];
+    },
     dirToBase: d => fwd(d),
     dirToTask: d => inv(d),
     describe: () => kind + ' (Rz(' + TASKMAP_PHI[kind] + '°), 抬高 ' + h + 'mm)'
@@ -3007,6 +3278,34 @@ function normalizeArms(cfg) {
 /* 当前生效的所有臂（引擎的 buildChain 会调它） */
 function activeArms() {
   return (CONFIG && CONFIG.__arms) ? CONFIG.__arms : null;
+}
+
+/* ---------------- 每条臂自己的装配位 ----------------
+   多臂时两条臂装在车上的位置不同（一左一右），所以"它相对世界坐标系原点在哪"
+   是【每条臂各一份】。任务域校核按臂分别做 —— 这是"单臂三轴检验 × 2"的前提：
+   否则两条臂共用一个装配位，基座重合、可达集完全相同，
+   "分别校核两次"就退化成把同一个答案抄两遍。
+
+   取值优先级：arm.asm → 模型级 vehicle.asm → RULES.init（单臂老配置兜底）。 */
+function asmOfArm(a) {
+  a = a || 0;
+  const A = ARMS[a];
+  if (A && A.model && A.model.asm) {
+    const s = A.model.asm;
+    return { x: +s.x || 0, y: +s.y || 0, z: +s.z || 0 };
+  }
+  if (MODEL && MODEL.vehicle && MODEL.vehicle.asm) {
+    const s = MODEL.vehicle.asm;
+    return { x: +s.x || 0, y: +s.y || 0, z: +s.z || 0 };
+  }
+  const ini = (RULES && RULES.init) ? RULES.init : { x: 0, y: 0, z: 0 };
+  return { x: +ini.x || 0, y: +ini.y || 0, z: +ini.z || 0 };
+}
+function asmAllArms() {
+  const n = (typeof armCount === 'function') ? armCount() : 1;
+  const out = [];
+  for (let a = 0; a < n; a++) out.push(asmOfArm(a));
+  return out;
 }
 
 /* ---------------- 启动时把默认配置装上 ----------------
@@ -3171,6 +3470,9 @@ defineConfig('demo3dof', {
       { /* ---- 左臂：装在车左前，朝前伸（yaw = -90）---- */
         name: '左臂',
         base: { xyz: [60, 180, 250], yaw: -90 },
+        /* 相对世界坐标系(OXYZ)原点的装配位 —— 每条臂各一份。
+           两条臂装的位置不同，"分别校核两次"才有意义。 */
+        asm: { x: 60, y: 180, z: 0 },
         links: [
           { name: 'base_link', joint: 'base_joint', type: 'revolute',
             posMode: 'origin', pos: [60, 180, 250], axes: ID, axis: '+Z', limits: null },
@@ -3183,6 +3485,7 @@ defineConfig('demo3dof', {
       { /* ---- 右臂：装在车右前，与左臂镜像（yaw = +90）---- */
         name: '右臂',
         base: { xyz: [-60, 180, 250], yaw: 90 },
+        asm: { x: -60, y: 180, z: 0 },
         links: [
           { name: 'base_link', joint: 'base_joint', type: 'revolute',
             posMode: 'origin', pos: [-60, 180, 250], axes: ID, axis: '+Z', limits: null },

@@ -78,6 +78,16 @@ globalThis.__api = {
   renderAngles, setSectOpen, syncVisMenu,
   /* ★ 旋转角度滑条 + 装配参数（进 JSON）*/
   renderVehicle, vehicleOf, setVehicle, onChangeJoint, resetAllJoints, syncQReadout,
+  /* ★ 按臂分别校核（单臂三轴检验 × N）*/
+  asmOfArm, asmAllArms, taskToBaseArm, dirToBaseArm, mapObj,
+  setTestMap: (m) => { MAP = m; },      // 仅供自检临时挂 map
+  setArmStats: (v) => { ARMSTATS = v; },
+  setVOX: (v) => { VOX = v; },
+  get MAPV(){return MAP},
+  armJointRange, qLimitsArm, curQArm, fkArm, withArmQ,
+  ikPosA, ikSolve6A, bestOfSeedsA, analyzeTaskArm, analyzeTask, renderTaskPanel,
+  get TASK_ARM(){return TASK_ARM}, set TASK_ARM(v){TASK_ARM=v},
+  get TASK_BY_ARM(){return TASK_BY_ARM},
   get ARMS(){return ARMS}, get ARMSTATS(){return ARMSTATS},
   fkAllArm, fkAllArms,
   get CONFIG(){return CONFIG},
