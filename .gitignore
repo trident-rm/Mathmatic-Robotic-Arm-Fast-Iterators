@@ -23,6 +23,11 @@ web/checks/t11_panel_shot.html
 web/checks/t16_level3.html
 web/checks/*.tmp.html
 
+# ---- 我自己的临时脚手架（探针/提交消息/一次性脚本）----
+# 一律以 tmp_ 开头，用完即删；万一忘了删也不该进库
+# （踩过两次：git add -A 把它们一起提交了）
+tmp_*
+
 # ---- 打包产物（web/pack/t10_pack.js 写到仓库上一级）----
 ../Pack/
 Pack/
