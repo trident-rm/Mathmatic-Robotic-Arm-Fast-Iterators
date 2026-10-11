@@ -20,6 +20,7 @@ web/checks/t10_ui_probe.html
 web/checks/t10_both_probe.html
 web/checks/t11_ui_probe.html
 web/checks/t11_panel_shot.html
+web/checks/t16_level3.html
 web/checks/*.tmp.html
 
 # ---- 打包产物（web/pack/t10_pack.js 写到仓库上一级）----
