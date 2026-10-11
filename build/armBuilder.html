@@ -2251,6 +2251,7 @@ function wizDefaultLinks(n) {
   for (let i = 1; i <= n; i++) {
     out.push({ name: 'link' + i, joint: 'joint' + i,
                pos: [0, 0, i === 1 ? 100 : 150], axis: '+X',
+               axes: { x: '+X', y: '+Y', z: '+Z' },      // 新坐标系三轴对齐父系的哪个轴
                rot: [], limits: [-90, 90], movable: true });
   }
   return out;
@@ -2282,7 +2283,9 @@ function wizBuildArm(a) {
       name: nm, joint: (L.joint || '').trim() || (nm + '_j'),
       type: L.movable === false ? 'fixed' : 'revolute', posMode: 'parent',
       pos: [+L.pos[0] || 0, +L.pos[1] || 0, +L.pos[2] || 0],
-      axes: ID_AXES, axis: L.axis || '+X',
+      /* 新坐标系三轴对齐父系的哪个轴；没填就按 ID（与父系同向） */
+      axes: L.axes || ID_AXES,
+      axis: L.axis || '+X',
       limits: (L.movable === false || !L.limits) ? null : [+L.limits[0], +L.limits[1]],
       rot: (Array.isArray(L.rot) && L.rot.length) ? L.rot : undefined
     });
@@ -2360,17 +2363,33 @@ function wizStepHTML() {
 
 function wizLinkRow(ai, li, L) {
   const lim = L.limits ? L.limits : ['', ''];
-  return `<div class="f" style="margin-bottom:5px">
-    <label>#${li + 1}</label>
-    <input type="text" data-ln="${ai}:${li}" value="${L.name || ''}" placeholder="link 名">
-    <input type="number" data-lp0="${ai}:${li}" value="${L.pos[0]}" step="10" title="x (mm)">
-    <input type="number" data-lp1="${ai}:${li}" value="${L.pos[1]}" step="10" title="y (mm)">
-    <input type="number" data-lp2="${ai}:${li}" value="${L.pos[2]}" step="10" title="z (mm)">
-    <select data-la="${ai}:${li}" title="转动轴">${AXIS_OPTS.map(a =>
-      `<option ${L.axis === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
-    <input type="number" data-ll0="${ai}:${li}" value="${lim[0]}" step="5" title="下限 (°)，留空=不限">
-    <input type="number" data-ll1="${ai}:${li}" value="${lim[1]}" step="5" title="上限 (°)，留空=不限">
-    <button class="del" data-del="${ai}:${li}" title="删掉这一段">✕</button>
+  const ax = L.axes || ID_AXES;
+  const axSel = (key, tag) =>
+    `<select data-lax="${ai}:${li}:${key}" title="新坐标系的 ${tag} 轴对齐父系的哪个轴">` +
+    AXIS_OPTS.map(a => `<option ${ax[key] === a ? 'selected' : ''}>${a}</option>`).join('') +
+    `</select>`;
+  return `<div class="segrow" style="padding:6px 8px;margin-bottom:6px">
+    <div class="f">
+      <label>#${li + 1}</label>
+      <input type="text" data-ln="${ai}:${li}" value="${L.name || ''}" placeholder="link 名">
+      <input type="number" data-lp0="${ai}:${li}" value="${L.pos[0]}" step="10" title="offset x (mm)">
+      <input type="number" data-lp1="${ai}:${li}" value="${L.pos[1]}" step="10" title="offset y (mm)">
+      <input type="number" data-lp2="${ai}:${li}" value="${L.pos[2]}" step="10" title="offset z (mm)">
+      <button class="del" data-del="${ai}:${li}" title="删掉这一段">✕</button>
+    </div>
+    <div class="f" style="margin-top:5px">
+      <label title="新坐标系 X/Y/Z 分别对齐父系的哪个轴">坐标系</label>
+      ${axSel('x', 'X')}${axSel('y', 'Y')}${axSel('z', 'Z')}
+      <span></span>
+    </div>
+    <div class="f" style="margin-top:5px">
+      <label>转动轴</label>
+      <select data-la="${ai}:${li}" title="绕新坐标系自身的哪个轴转动">${AXIS_OPTS.map(a =>
+        `<option ${L.axis === a ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      <input type="number" data-ll0="${ai}:${li}" value="${lim[0]}" step="5" title="下限 (°)，留空=不限">
+      <input type="number" data-ll1="${ai}:${li}" value="${lim[1]}" step="5" title="上限 (°)，留空=不限">
+      <span></span>
+    </div>
   </div>`;
 }
 
@@ -2393,6 +2412,13 @@ function wizCollect() {
   document.querySelectorAll('[data-la]').forEach(el => {
     const [ai, li] = el.dataset.la.split(':').map(Number);
     if (WIZ.arms[ai] && WIZ.arms[ai].links[li]) WIZ.arms[ai].links[li].axis = el.value;
+  });
+  /* 新坐标系三轴对齐父系的哪个轴（data-lax="臂:段:轴"） */
+  document.querySelectorAll('[data-lax]').forEach(el => {
+    const [ai, li, key] = el.dataset.lax.split(':');
+    const L = WIZ.arms[+ai] && WIZ.arms[+ai].links[+li]; if (!L) return;
+    if (!L.axes) L.axes = { x: '+X', y: '+Y', z: '+Z' };
+    L.axes[key] = el.value;
   });
   for (const k of ['0', '1']) {
     document.querySelectorAll('[data-ll' + k + ']').forEach(el => {
@@ -2417,10 +2443,22 @@ function wizValidate(step) {
   if (step === 2) {
     for (let i = 0; i < WIZ.arms.length; i++) {
       const a = WIZ.arms[i];
-      if (!a.links.length) return (a.name || ('臂' + (i + 1))) + ' 至少要有一段';
+      const who = a.name || ('臂' + (i + 1));
+      if (!a.links.length) return who + ' 至少要有一段';
       for (let j = 0; j < a.links.length; j++) {
-        const nm = (a.links[j].name || '').trim();
-        if (!nm) return (a.name || ('臂' + (i + 1))) + ' 第 ' + (j + 1) + ' 段还没起名字';
+        const L = a.links[j];
+        const nm = (L.name || '').trim();
+        if (!nm) return who + ' 第 ' + (j + 1) + ' 段还没起名字';
+        /* 坐标系必须是右手系：三轴不能重复、行列式要为 +1。
+           用引擎里的 frameOK() 判，判据只有一份。 */
+        if (L.axes && typeof frameOK === 'function') {
+          const r = frameOK(L.axes);
+          if (r.dup) return who + ' 第 ' + (j + 1) + ' 段：坐标系的三个轴重复了';
+          if (Math.abs(r.det - 1) > 1e-9) {
+            return who + ' 第 ' + (j + 1) + ' 段：坐标系不是右手系（det=' +
+                   r.det.toFixed(0) + '，应为 +1）';
+          }
+        }
       }
     }
   }

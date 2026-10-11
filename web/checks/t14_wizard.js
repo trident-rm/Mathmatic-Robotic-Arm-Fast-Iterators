@@ -127,6 +127,37 @@ console.log('\n=== ⑥ 装配位置 / 夹爪轴是独立项，不混进 links ==
      [w.insertAxis, w.gripAxis]);
 }
 
+console.log('\n=== ⑧ 坐标系朝向可改（新坐标系对齐父系哪个轴）===');
+{
+  W('wizReset')();
+  const w = W('WIZ');
+  /* 默认是 ID（与父系同向） */
+  ok(JSON.stringify(w.arms[0].links[0].axes) === JSON.stringify({ x: '+X', y: '+Y', z: '+Z' }),
+     '默认坐标系 = ID（三轴与父系同向）', w.arms[0].links[0].axes);
+
+  /* 强制成非 ID 的右手系：x→+X, y→-Z, z→+Y（这就是同济 link5 的那种） */
+  w.arms[0].links[0].axes = { x: '+X', y: '-Z', z: '+Y' };
+  const m = W('wizBuildArm')(w.arms[0]);
+  ok(JSON.stringify(m.links[1].axes) === JSON.stringify({ x: '+X', y: '-Z', z: '+Y' }),
+     '自定义坐标系传到了模型里', m.links[1].axes);
+  A.buildChain(m);
+  ok(A.NJ >= 1, '非 ID 坐标系也能建链', A.NJ);
+  /* 该段相对父系的姿态不该再是单位阵 */
+  const F = A.fkAll(new Array(A.NJ).fill(0));
+  const R1 = F[1].R;
+  const isI = Math.abs(R1[0][0] - 1) < 1e-12 && Math.abs(R1[1][1] - 1) < 1e-12 &&
+              Math.abs(R1[2][2] - 1) < 1e-12;
+  ok(!isI, '带坐标系旋转的段，正解出来的姿态不是单位阵（朝向真的生效了）', R1);
+
+  /* 校验要拦住左手系与重复轴 */
+  w.arms[0].links[0].axes = { x: '+X', y: '+X', z: '+Z' };
+  ok(W('wizValidate')(2) !== '', '三轴重复被拦下', W('wizValidate')(2));
+  w.arms[0].links[0].axes = { x: '+X', y: '-Y', z: '+Z' };   // det = -1，左手系
+  ok(W('wizValidate')(2) !== '', '左手系被拦下（det=-1）', W('wizValidate')(2));
+  w.arms[0].links[0].axes = { x: '+X', y: '-Z', z: '+Y' };   // det = +1，合法
+  ok(W('wizValidate')(2) === '', '合法的右手系放行', W('wizValidate')(2));
+}
+
 console.log('\n=== ⑦ 接线存在 ===');
 {
   /* 沙箱里 document.getElementById 返回桩元素，所以只能验"函数在、能被调用" */
