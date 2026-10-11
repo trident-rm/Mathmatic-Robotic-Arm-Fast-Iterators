@@ -31,10 +31,12 @@ const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex').slice(
 
 /* ================= ⓪ 生成一致性 ================= */
 console.log('\n=== ⓪ armLink.html 是不是"只追加"生成的 ===');
-const src = fs.readFileSync(path.join(dir,'..','..','build','armBuilder.html'), 'utf8');
-const out = fs.readFileSync(path.join(dir,'..','..','build','armLink.html'), 'utf8');
-const modSrc = fs.readFileSync(path.join(dir, '..', 'src', 'modules', 't11_link_mod.js'), 'utf8');
-const cssSrc = fs.readFileSync(path.join(dir, '..', 'src', 'modules', 't11_link_css.css'), 'utf8');
+/* 统一成 LF 再比：交付物是 LF 合成的，工作区可能因 core.autocrlf 是 CRLF */
+const rl = p => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+const src    = rl(path.join(dir,'..','..','build','armBuilder.html'));
+const out    = rl(path.join(dir,'..','..','build','armLink.html'));
+const modSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_mod.js'));
+const cssSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_css.css'));
 const blocks = html => [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
 const SB = blocks(src), OB = blocks(out);
 ok(SB.length === 3 && OB.length === 4, 'armBuilder 有 3 个 script，armLink 有 4 个（只多一个）', [SB.length, OB.length]);

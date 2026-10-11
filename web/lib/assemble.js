@@ -22,32 +22,41 @@ const TEMPLATE = path.join(SRC, 'apps', 'armBuilder.html');
 const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size'];
 
 const read = p => fs.readFileSync(p, 'utf8');
+
+/* 读文本并统一成 LF。
+   ★ 必须做这个：Windows 上 core.autocrlf=true 会把源文件检出成 CRLF，
+     而交付物是逐字节合成 + 断言 md5 的，行尾一变就对不上。
+     .gitattributes 已经把行尾钉死成 LF，这里再加一道保险，
+     让构建在任何 clone / 任何 git 配置下都得到同样的字节。            */
+const readLF = p => read(p).replace(/\r\n/g, '\n');
+
 const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
 
 /* 把骨架里的 <!--__MODULE:name__--> 替换成模块源码 */
 function embedModules(template, modDir) {
-  let out = template;
+  let out = template.replace(/\r\n/g, '\n');
   for (const name of MODULES) {
     const marker = '<!--__MODULE:' + name + '__-->';
     if (!out.includes(marker)) throw new Error('模板里没有标记 ' + marker);
-    out = out.replace(marker, () => read(path.join(modDir, name + '.js')));
+    out = out.replace(marker, () => readLF(path.join(modDir, name + '.js')));
   }
   return out;
 }
 
-/* 读骨架模板 */
-function readTemplate() { return read(TEMPLATE); }
+/* 读骨架模板（统一 LF） */
+function readTemplate() { return readLF(TEMPLATE); }
 
 /* 合成 armBuilder.html 的完整文本 */
 function buildArmBuilder() {
   return embedModules(readTemplate(), path.join(SRC, 'modules'));
 }
 
-/* 写文件（LF，不加 BOM），并返回 md5 */
+/* 写文件（统一 LF，不加 BOM），并返回 md5 */
 function writeLF(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, text, 'utf8');
-  return md5(text);
+  const lf = String(text).replace(/\r\n/g, '\n');
+  fs.writeFileSync(file, lf, 'utf8');
+  return md5(lf);
 }
 
 /* 给生成物加一行"这是构建产物"的头注释 */
@@ -57,5 +66,5 @@ function banner(kind, extra) {
 }
 
 module.exports = { WEB, SRC, ROOT, TEMPLATE, MODULES,
-                   read, md5, embedModules, readTemplate,
+                   read, readLF, md5, embedModules, readTemplate,
                    buildArmBuilder, writeLF, banner };

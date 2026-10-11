@@ -1,0 +1,31 @@
+# 统一行尾：仓库里一律 LF，检出到工作区也一律 LF。
+#
+# 为什么必须显式规定：Windows 上 git 的 core.autocrlf=true 会把源文件检出成 CRLF，
+# 而交付物是【由源码逐字节合成】的（web/build.js 会断言 md5），
+# 行尾一变 md5 就对不上，别人克隆下来构建会直接失败。
+# 所以这里强制 -text（不做任何行尾转换），保证任何平台克隆出来的字节都一样。
+
+* text=auto eol=lf
+
+# 明确按文本处理（源码 / 文档）—— 也要显式写，避免被上层规则覆盖
+*.js    text eol=lf
+*.m     text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+*.csv   text eol=lf
+*.log   text eol=lf
+*.sh    text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+
+# 二进制：绝不碰
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary

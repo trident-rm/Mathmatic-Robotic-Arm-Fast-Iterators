@@ -14,8 +14,11 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const P = require('../lib/paths');
 
-const read = p => fs.readFileSync(p, 'utf8');
-const md5  = s => crypto.createHash('md5').update(s, 'utf8').digest('hex').slice(0, 12);
+/* 读文本统一成 LF —— 交付物是逐字节合成 + 断言 md5 的，行尾必须与平台无关 */
+const read = p => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+const md5  = s => crypto.createHash('md5')
+                        .update(String(s).replace(/\r\n/g, '\n'), 'utf8')
+                        .digest('hex').slice(0, 12);
 
 /* 由 armBuilder 的完整文本生成 armLink 的完整文本（纯函数，不碰磁盘） */
 function buildLink(armBuilderHtml, opts) {
@@ -23,8 +26,8 @@ function buildLink(armBuilderHtml, opts) {
   const css = opts.css !== undefined ? opts.css : read(P.LINK_CSS);
   const mod = opts.mod !== undefined ? opts.mod : read(P.LINK_MOD);
 
-  let html = armBuilderHtml;
-  const srcMD5 = md5(armBuilderHtml);
+  let html = String(armBuilderHtml).replace(/\r\n/g, '\n');   // 输出保证 LF
+  const srcMD5 = md5(html);
 
   const sub = (what, from, to) => {
     const n = html.split(from).length - 1;
