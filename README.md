@@ -164,9 +164,13 @@ P   = armFeasData(cfg);           % ④ 只要数据、不要界面
 改臂型**只需要改 `matlab/model/armSpec.m` 一个文件**：往 `spec` 里加一项，
 界面自动多出一行控件、HTML 自动多画一段杆和一条关节轴。
 
-> ⚠ 本次重构**没有在 MATLAB 上实跑过**（开发机没装 MATLAB）。
-> 改动是机械性的：`addpath(here)` → `run(.../matlab/setup.m)`、产物路径改到 `docs/` 与 `build/`。
-> 第一次在装有 MATLAB 的机器上跑时请留意 `matlab/checks/t2_app_smoke.m` 的输出。
+> ✅ **已在 MATLAB R2025b Update 4（`matlabroot = D:\`）上实跑验证过**（`matlab -batch`）：
+> - `matlab/setup.m` 生效，`armSpec` / `buildChain` / `chainFK` / `armFeasApp`
+>   都从新位置解析到；
+> - `matlab/checks/t2_app_smoke.m` 全部断言通过，含
+>   **`chainFK` vs RST `getTransform` 交叉验证：位置误差 2.13e-13 mm、姿态 3.89e-16**；
+> - 界面构造出 19 个控件，5 组控件改动重算均无报错；
+> - 导出确实落在 `build/armFeas.html`（321 KiB），Edge 无头打开可正常渲染。
 
 ### 4. 无头自检（可选，需要 Node.js + Edge）
 
