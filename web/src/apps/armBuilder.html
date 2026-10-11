@@ -19,6 +19,10 @@
   .chip{background:#0b1020;border:1px solid var(--line);border-radius:999px;
         padding:3px 10px;font-size:11px;color:var(--dim);white-space:nowrap}
   .chip b{color:var(--fg)}
+  /* 「已保存」提示：不占地方、只在改动时闪一下。
+     加它是因为用户问过"到底有没有实时保存" —— 看不见的东西等于不存在。 */
+  #savedChip{transition:border-color .2s,color .2s}
+  #savedChip.flash{border-color:#2f6fb0;color:#9fd4ff}
   #tools{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:11px;color:var(--dim);flex-wrap:wrap}
   button{background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:6px;
     padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit}

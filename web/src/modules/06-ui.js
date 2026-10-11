@@ -148,12 +148,49 @@ function initVisMenu() {
    性能：滑条 input 事件很密，所以用 rAF 合并 —— 一帧最多算一次，
    拖动不会把主线程堵死。 */
 let Q_RAF = null;
+/* ---------------- 关节角度的"网格" ----------------
+   滑条只能取 min + k·step 这类网格上的值，而"我们算出来的网格点"和
+   "浏览器自己吸附出来的网格点"一旦差一格，就会出现
+   "引擎里 77、滑条上 76.9"这种两边对不上的状态（踩过）。
+   ★ 所以网格【由我们自己定】，并且只此一处：
+       步长 = 1°（度数上最自然，也和数字框的 step=1 一致）
+       网格点 = lo 起、每 1° 一个，最后补上 hi
+     写 value 之前先吸附到它；拖回来的值也吸附到它。
+   这样引擎、滑条、数字框、读数永远是同一个数。 */
+function angleGrid(lo, hi){
+  const step = 1;
+  const n = Math.max(0, Math.ceil((hi - lo) / step - 1e-9));
+  return { lo: lo, hi: hi, step: step, n: n };
+}
+function snapToGrid(v, g){
+  if (!g) return +v || 0;
+  if (!(v >= g.lo)) v = g.lo;                     // NaN 也走这条
+  if (v > g.hi) v = g.hi;
+  return Math.min(g.hi, Math.round(g.lo + Math.round((v - g.lo) / g.step) * g.step));
+}
+/* 第 i 个关节的网格（找不到面板元素时按限位现算一个） */
+function jointGrid(i, lo, hi){
+  const el = document.getElementById('qsl' + i);
+  if (el) {
+    const step = +el.step;
+    if (isFinite(step) && step > 0) {
+      return { lo: +el.min, hi: +el.max, step: step,
+               n: Math.max(0, Math.ceil((+el.max - +el.min) / step - 1e-9)) };
+    }
+  }
+  return angleGrid(lo, hi);
+}
 function onChangeJoint(i, v) {
-  Q[i] = v;
+  /* ★ 以"网格上的那个点"为准：传进来的值先吸附到网格，再写回控件与引擎。
+     不这么做的话，控件会按自己的规则再吸附一次，两边就差一格。 */
+  const lim = (typeof qLimits === 'function') ? qLimits()[i] : null;
+  let val = +v;
+  if (lim) val = snapToGrid(val, jointGrid(i, lim[0], lim[1]));
+  Q[i] = val;
   const num = document.getElementById('qnum' + i);
-  if (num && +num.value !== v) num.value = (+v).toFixed(1);
-  const sl = document.getElementById('qsl' + i);
-  if (sl && +sl.value !== v) sl.value = v;
+  if (num && +num.value !== val) num.value = val.toFixed(1);
+  const sl0 = document.getElementById('qsl' + i);
+  if (sl0 && +sl0.value !== val) sl0.value = val;
   if (Q_RAF) return;
   Q_RAF = requestAnimationFrame(() => {
     Q_RAF = null;
@@ -206,8 +243,13 @@ function renderAngles() {
       const i = flat;
       const lo = c.limits ? Math.min(c.limits[0], c.limits[1]) : -180;
       const hi = c.limits ? Math.max(c.limits[0], c.limits[1]) : 180;
-      const stepv = (hi - lo) / 200;
-      const val = (Q[i] === undefined) ? 0 : +Q[i];
+      /* ★ 步长固定 1°（与数字框的 step=1 一致）。
+         原来用 (hi−lo)/200（joint1 = 0.61°、joint2 = 1.45°），网格是"歪"的：
+         写一个不在网格上的 value 会被浏览器自己吸附，和引擎里的值差一格。
+         1° 这个网格是自洽的，且 200 个刻度在 150px 宽的条上够用。 */
+      const grid = angleGrid(lo, hi);
+      const stepv = grid.step;
+      const val = snapToGrid((Q[i] === undefined) ? 0 : Q[i], grid);
       const limTxt = c.limits ? (lo + ' ~ ' + hi + '°') : '不限（±180°）';
       rows.push(
         '<div class="qrow" title="限位 ' + limTxt + '">' +
@@ -326,6 +368,35 @@ function wireVehicle() {
 function initVehicle() {
   const b = document.getElementById('btnQReset');
   if (b) b.onclick = e => { e.stopPropagation(); resetAllJoints(); };
+}
+
+/* ---------------- 「已保存」提示 ----------------
+   每次 saveLocal() 都会调这里。为什么要有它：用户问过"到底有没有实时保存" ——
+   看不见的机制等于不存在（这次报的第二个问题就是这么来的）。
+   行为：
+     · 第一次（载入存档时）只把状态写出来，不闪
+     · 之后每次改动闪一下并显示时间
+   元素是懒创建的，模板里不用留位置；样式在 .chip 那条规则旁边。 */
+let SAVED_HIDE = null;
+function markSaved(quiet) {
+  const t = document.getElementById('tools');
+  if (!t) return;
+  let el = document.getElementById('savedChip');
+  if (!el) {
+    el = document.createElement('span');
+    el.id = 'savedChip'; el.className = 'chip';
+    el.title = '模型、关节角与设置都存在浏览器本地；刷新/重开还在。' +
+               '换构型时各存各的，互不覆盖。「保存 JSON」是另存成文件。';
+    t.insertBefore(el, t.firstChild);
+  }
+  const d = new Date();
+  const hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) +
+             ':' + ('0' + d.getSeconds()).slice(-2);
+  el.textContent = '🕒 已保存 ' + hm;
+  if (quiet) return;
+  el.classList.add('flash');
+  if (SAVED_HIDE) clearTimeout(SAVED_HIDE);
+  SAVED_HIDE = setTimeout(() => el.classList.remove('flash'), 700);
 }
 
 /* ---------------- 接线 ---------------- */

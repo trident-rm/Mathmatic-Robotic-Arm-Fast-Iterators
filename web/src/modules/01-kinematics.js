@@ -280,6 +280,19 @@ function updateAll(){
   renderHeader(dt);
   draw3D(); drawList();
 }
+/* 重建"旋转角度"面板。
+   ★ 为什么必须单独有这么一步：updateAll() 里的 buildChain() 只更新【引擎】
+     （CHAIN / NJ / qLimits），而右侧那个面板是【一次性渲染出来的 DOM】——
+     滑条的范围、数字框的 max、关节名、行数，全是渲染那一刻的快照。
+     谁改了链结构（加段/删段/改限位），谁就要把它重画一遍；
+     不重画的表现是"引擎里已经变了、界面上还是老的"：
+       · 改限位 → 滑条范围还是旧限位
+       · 加一段 → 面板里根本不出现这条关节
+       · 删一段 → 面板里那条关节还留着
+     （06-ui 里 renderAngles() 会重建整个 #qbody 并重接事件。） */
+function refreshAnglesUI(){
+  if(typeof renderAngles === 'function') renderAngles();
+}
 function renderHeader(dt){
   document.getElementById('title').textContent = MODEL.name || '未命名';
   document.getElementById('model').textContent =
@@ -325,7 +338,7 @@ function drawList(){
     const i = +b.dataset.i, n = MODEL.links.length - i;
     const msg = (n > 1) ? `删除「${MODEL.links[i].name}」及其之后的 ${n-1} 个坐标系？`
                         : `删除「${MODEL.links[i].name}」？`;
-    if(confirm(msg)){ MODEL.links.splice(i); closeForm(); updateAll(); saveLocal(); }
+    if(confirm(msg)){ MODEL.links.splice(i); closeForm(); updateAll(); refreshAnglesUI(); saveLocal(); }
   });
 }
 
@@ -427,7 +440,7 @@ function submitForm(){
             : [Math.min(+loS,+hiS), Math.max(+loS,+hiS)]
   };
   if(EDIT < 0) MODEL.links.push(L); else MODEL.links[EDIT] = L;
-  closeForm(); updateAll(); saveLocal();
+  closeForm(); updateAll(); refreshAnglesUI(); saveLocal();
 }
 function closeForm(){ document.getElementById('form').className = ''; EDIT = -1; }
 
@@ -444,52 +457,194 @@ function warnNoLS(){
   s.textContent = '⚠ 浏览器禁用了本地存档，请用「保存 JSON」保存模型';
   t.insertBefore(s, t.firstChild);
 }
+/* 模型的【规范化】序列化：对象按 key 排序，用于"两份模型是不是同一份"的比对。
+   ★ 必须只有这一个口径：存档端与读取端各写各的（一个排序一个不排），
+     比出来的结果必然是"不相等" —— 踩过，判定恒假、看着像功能没生效。
+   ★ 另外固定忽略 vehicle：那是【装配参数】（装在哪、往哪插），
+     是界面运行起来之后挂到模型上的，配置里那条臂本来就没有这个块。
+     不忽略的话"这份模型是不是当前配置那条臂"永远判否。 */
+function canonModel(m){
+  if(!m) return '';
+  return JSON.stringify(m, (k, v) => {
+    if(k === 'vehicle') return undefined;                 // 顶层 vehicle 不参与比对
+    return (v && typeof v === 'object' && !Array.isArray(v))
+      ? Object.keys(v).sort().reduce((o, kk) => (o[kk] = v[kk], o), {})
+      : v;
+  });
+}
+/* ---------------- 本地存档 ----------------
+   ★ 每条构型各存一份：模型 `armBuilderModel:<configId>`、设置 `armBuilderCfg:<configId>`。
+     为什么必须分开存：一套构型下的改动，不该被"切到另一套构型看一眼"冲掉 ——
+     原来只有一份，切走那一下就把存档覆盖成新构型，切回来改动就没了。
+
+   ★ 设置里其实混了两类东西，不能都按构型分（分错了会互相打架）：
+       按构型分的「设置」：装配位 init / 映射 taskMap / 底盘箱 chassis / 底盘高 baseH
+                          / 采样数 nSample / 安装 yaw / 关节角 q
+         —— 换个构型这些本来就该各是各的（车不一样、规则不一样）
+       全局的「视图偏好」：分区折叠 SECT_OPEN（另有自己的键）、左右栏分隔条 splitPct、
+                          显示开关 showbox
+         —— 这是"怎么看"，与哪条臂无关，切构型不该把它重置
+
+   ★ 恢复顺序（踩过两次）：加载时【先设置、再模型、最后关节角】。
+     setModel() 会把 Q 清空（换了模型旧角度没意义），所以关节角必须最后恢复。 */
+const LS_MODEL_PREFIX = 'armBuilderModel';
+const LS_CFG_PREFIX = 'armBuilderCfg';
+const LS_VIEW_KEY = 'armBuilderView';
+const LS_MODEL_OLD = 'armBuilderModel';        // 旧版：不带后缀的那两个键
+const LS_CFG_OLD = 'armBuilderCfg';
+function lsModelKey(cfgId){
+  const id = cfgId || ((typeof activeConfigId === 'function') ? activeConfigId() : null);
+  return id ? (LS_MODEL_PREFIX + ':' + id) : LS_MODEL_OLD;
+}
+function lsCfgKey(cfgId){
+  const id = cfgId || ((typeof activeConfigId === 'function') ? activeConfigId() : null);
+  return id ? (LS_CFG_PREFIX + ':' + id) : LS_CFG_OLD;
+}
+/* 上次用的是哪个配置？
+   ★ 不能靠"扫一遍 armBuilderCfg:* 取第一个" —— 每条构型都有自己的存档，
+     遍历顺序是插入顺序，取到的很可能是最早那条，不是最后用的那条（踩过）。
+     所以"上次用谁"单独记在全局视图那块（armBuilderView.configId）。 */
+function savedConfigId(){
+  try{
+    const v = localStorage.getItem(LS_VIEW_KEY);
+    if(v){ const id = JSON.parse(v).configId; if(id) return id; }
+  }catch(e){}
+  try{                                    // 旧版：不带后缀的那个键里记着
+    const s = localStorage.getItem(LS_CFG_OLD);
+    if(s) return JSON.parse(s).configId || null;
+  }catch(e){}
+  return null;
+}
+/* 一次性迁移：旧版把模型与设置存在【不带后缀】的键里。
+   只有当那份存档确实属于当前配置时才认领 —— 否则会拿甲的模型去套乙的配置
+   （这正是要修的那类错位）。迁移只做一次，之后它归当前配置所有。 */
+function migrateOldArchive(){
+  if(!(typeof localStorage !== 'undefined') || LS_BLOCKED) return;
+  let old = null, oldCfg = null;
+  try{ old = localStorage.getItem(LS_MODEL_OLD); oldCfg = localStorage.getItem(LS_CFG_OLD); }
+  catch(e){ return; }
+  if(!old) return;
+  const cfgId = (typeof activeConfigId === 'function') ? activeConfigId() : null;
+  if(!cfgId) return;
+  let c = null, m = null;
+  try{ c = oldCfg ? JSON.parse(oldCfg) : null; }catch(e){}
+  try{ m = JSON.parse(old); }catch(e){ return; }
+  const mine = (c && c.configId === cfgId) ||
+               ((c && c.modelCfg) ? canonModel(m) === c.modelCfg : false);
+  if(!mine) return;                       // 不是我的，留着不动（用户切回去还能用）
+  try{
+    if(!localStorage.getItem(lsModelKey(cfgId))) localStorage.setItem(lsModelKey(cfgId), old);
+    if(oldCfg && !localStorage.getItem(lsCfgKey(cfgId))) localStorage.setItem(lsCfgKey(cfgId), oldCfg);
+    localStorage.removeItem(LS_MODEL_OLD);
+    localStorage.removeItem(LS_CFG_OLD);
+  }catch(e){}
+}
+/* 按构型分的设置快照（模型之外的一切） */
 function cfgObj(){                       // 规则侧设置的快照（模型之外的一切）
   return { init: RULES ? RULES.init : null,
            taskMap: MAP ? MAP.taskMap : null,      // ★ 任务系映射（原来是布尔 swap）
            baseH: RULES ? RULES.baseH : null,
            nSample: document.getElementById('selN').value,
            yaw: MODEL ? MODEL.base.yaw : -90,
+           /* ★ 关节角也要存：原来只存"模型"，拖过的角度刷新就归零了。
+              存的是扁平向量，载入时按关节数核对（对不上就整段忽略，不能硬套）。 */
+           q: (typeof Q !== 'undefined' && Array.isArray(Q)) ? Q.slice() : null,
            chassis: CHASSIS, chassisV: CHASSIS_V,      // ★ 底盘箱（带默认值版本号）
-           sizer: SIZER, showbox: SHOWBOX,             // ★ 伸展尺寸 / 显示开关
-           splitPct: SPLIT_PCT,                        // ★ 右栏上下分隔条位置
-           configId: (typeof activeConfigId === 'function') ? activeConfigId() : null };  // ★ 当前配置
+           sizer: SIZER,                               // ★ 伸展尺寸
+           configId: (typeof activeConfigId === 'function') ? activeConfigId() : null,  // ★ 当前配置
+           /* ★ 配置里【原始】那条臂的快照（规范化序列化，与读取端同口径 canonModel）。
+              用途：旧版存档迁移时判断"这份存档是不是当前配置这条臂的"。 */
+           modelCfg: canonModel(CONFIG && CONFIG.model),
+           t: Date.now() };                      // 存档时间（界面上的"已保存"提示用）
 }
+/* 全局视图偏好（与哪条构型无关）。configId 一并记在这里 ——
+   它是"上次用的是哪条构型"，属于全局状态，不属于任何一条构型的存档。 */
+function viewObj(){
+  return { splitPct: SPLIT_PCT, showbox: SHOWBOX,
+           configId: (typeof activeConfigId === 'function') ? activeConfigId() : null,
+           t: Date.now() };
+}
+function saveSettings(){
+  try{ localStorage.setItem(lsCfgKey(), JSON.stringify(cfgObj())); }
+  catch(e){ warnNoLS(); }
+}
+/* ★ 换构型期间的落盘闸门。
+   切构型是"卸下旧臂 → 装上新臂 → 恢复它的存档"三步，中间有一小段
+   两边都不对的状态（模型还是旧的、角度已清空…）。这段里任何一次 saveLocal()
+   都会把【新构型那条键】写坏 —— 踩过：切到 B 再切回 A，A 的关节角变成全零，
+   因为 A 的存档在切换途中被 B 的空角度覆盖了。
+   所以切换期间把落盘压住，最后由切换流程自己在"状态齐了"之后写一次。 */
+let LS_HOLD = 0;
+function holdSave(on){ LS_HOLD += on ? 1 : -1; if(LS_HOLD < 0) LS_HOLD = 0; }
 function saveLocal(){
+  if(LS_HOLD > 0) return;                  // 切换途中：不落盘（见上）
   try{
-    localStorage.setItem('armBuilderModel', JSON.stringify(MODEL));
-    // ★ 规则侧设置也要存：装配臂位置 / 映射 / 底盘高 / 采样数 / 底盘箱 / 伸展尺寸
-    localStorage.setItem('armBuilderCfg', JSON.stringify(cfgObj()));
+    localStorage.setItem(lsModelKey(), JSON.stringify(MODEL));
+    // ★ 规则侧设置也要存：装配臂位置 / 映射 / 底盘高 / 采样数 / 底盘箱 / 伸展尺寸 / 关节角
+    localStorage.setItem(lsCfgKey(), JSON.stringify(cfgObj()));
+    localStorage.setItem(LS_VIEW_KEY, JSON.stringify(viewObj()));
+    if(typeof markSaved === 'function') markSaved();
   }catch(e){ warnNoLS(); }
 }
 function loadLocal(){
-  try{ const s = localStorage.getItem('armBuilderModel'); return s?JSON.parse(s):null; }
+  try{
+    const s = localStorage.getItem(lsModelKey());
+    if(s) return JSON.parse(s);
+    /* 还没有这条构型的存档：退回旧版那个不带后缀的键（迁移前的兜底） */
+    const o = localStorage.getItem(LS_MODEL_OLD);
+    return o ? JSON.parse(o) : null;
+  }
   catch(e){ warnNoLS(); return null; }
 }
-/* 恢复上次的规则侧设置（否则刷新一下就回到默认） */
-function loadCfg(){
+/* 恢复上次的设置。分两段：
+     ① 按构型的设置（只在这条构型自己的存档里，且 configId 要对得上）
+     ② 全局视图偏好（分隔条 / 显示开关）—— 与构型无关，永远恢复
+   ★ 关节角留到最后：调用方在 setModel() 之后必须再调一次 loadCfg()，
+     因为 setModel() 会清空 Q（换了模型，旧角度没意义）。 */
+function loadCfg(opts){
+  const qOnly = !!(opts && opts.qOnly);
   try{
-    const s = localStorage.getItem('armBuilderCfg'); if(!s) return;
+    if(!qOnly){
+      const v = localStorage.getItem(LS_VIEW_KEY);
+      if(v){
+        const o = JSON.parse(v);
+        if(typeof o.splitPct === 'number'){ SPLIT_PCT = o.splitPct; applySplit(); }
+        if(o.showbox) Object.assign(SHOWBOX, o.showbox);
+      }
+    }
+    let s = localStorage.getItem(lsCfgKey());
+    if(!s) s = localStorage.getItem(LS_CFG_OLD);      // 迁移前的兜底
+    if(!s) return;
     const c = JSON.parse(s);
 
-    /* ★ 存档属于哪个配置？不属于当前配置就整段忽略 ——
-       否则拿同济的存档去套新构型，会得到看着正常其实全错的数 */
+    /* ★ 这份设置属于哪个构型？不属于当前构型就整段忽略 ——
+       否则拿同济的装配位/底盘箱去套新构型，数字看着正常其实全错。
+       （恢复顺序踩过：先恢复设置、再上模型，最后才恢复关节角。） */
     if(c.configId && typeof activeConfigId === 'function' && c.configId !== activeConfigId()){
       return;
     }
-    if(c.init && RULES) Object.assign(RULES.init, c.init);
-    if(c.taskMap && MAP) MAP.taskMap = c.taskMap;        // ★ 原 swap:true/false
-    else if(typeof c.swap === 'boolean' && MAP) MAP.taskMap = c.swap ? 'swap' : 'noSwap';
-    if(c.baseH && RULES) RULES.baseH = c.baseH;
-    if(c.nSample) document.getElementById('selN').value = c.nSample;
-    /* ★ 底盘箱要带版本号：改动 CHASSIS 默认值后，老存档不能把新默认值盖回去 */
-    if(c.chassis && c.chassisV === CHASSIS_V) Object.assign(CHASSIS, c.chassis);
-    if(c.sizer)   Object.assign(SIZER,   c.sizer);
-    if(c.showbox) Object.assign(SHOWBOX, c.showbox);
-    if(typeof c.splitPct === 'number'){ SPLIT_PCT = c.splitPct; applySplit(); }
-    /* 映射可能被存档改过 ⇒ 重建换算对象（实现只有一份，见 04-config.js） */
-    if(typeof rebuildTaskMap === 'function' && MAP) rebuildTaskMap();
-    syncBoxChecks();
+    if(!qOnly){
+      if(c.init && RULES) Object.assign(RULES.init, c.init);
+      if(c.taskMap && MAP){ MAP.taskMap = c.taskMap; if(RULES && RULES.frame) RULES.frame.taskMap = c.taskMap; }
+      else if(typeof c.swap === 'boolean' && MAP) MAP.taskMap = c.swap ? 'swap' : 'noSwap';
+      if(c.baseH && RULES) RULES.baseH = c.baseH;
+      if(c.nSample) document.getElementById('selN').value = c.nSample;
+      /* ★ 底盘箱要带版本号：改动 CHASSIS 默认值后，老存档不能把新默认值盖回去 */
+      if(c.chassis && c.chassisV === CHASSIS_V) Object.assign(CHASSIS, c.chassis);
+      if(c.sizer)   Object.assign(SIZER,   c.sizer);
+      /* 映射可能被存档改过 ⇒ 重建换算对象（实现只有一份，见 04-config.js） */
+      if(typeof rebuildTaskMap === 'function' && MAP) rebuildTaskMap();
+      syncBoxChecks();
+    }
+    /* ★ 关节角：拖过的角度刷新后要还在。
+       只在"关节数对得上"时套用 —— 存档可能属于另一条臂，
+       硬套会把不相干的数塞进关节里（比归零更糟）。 */
+    if(Array.isArray(c.q) && c.q.length === NJ){
+      const lim = qLimits();
+      Q = c.q.map((v, i) => Math.min(Math.max(+v || 0, lim[i][0]), lim[i][1]));
+      CURVEPTS = fkAll(Q);
+      if(typeof syncQReadout === 'function') syncQReadout();
+    }
   }catch(e){ warnNoLS(); }
 }
 /* 把当前设置回填到控件上。★ 没有规则/尺寸的配置（rules:null）就跳过对应控件 */
@@ -501,6 +656,29 @@ function syncCfgInputs(){
   set('selMap', (MAP && MAP.taskMap === 'noSwap') ? 'side' : 'swap');
   if (MODEL) set('inYaw', MODEL.base.yaw);
 }
+/* 存档属于哪个配置？（没存过就 null）
+   ★ 只有这一个定义（在"本地存档"那一节里）。这里原来还有一份重复的，
+     两份各写各的键名，改了一处另一处不动 —— 典型的"改一处忘一处"。 */
+/* 这份存档能套到当前配置上吗？
+   ★ 判据是【结构】，不是【数值】。
+     存档按 configId 分键（armBuilderModel:<id>），"它属于谁"由键保证；
+     而杆长/限位本来就该跟配置不一样 —— 那正是要保存的东西。
+     所以只拦结构性不符：
+       · 段名对不上（配置源码里加了/删了/改了名的段）⇒ 旧存档套不上，别硬套
+       · 关节数不一样 ⇒ 关节角向量长度对不上，套了会错位
+     踩过：早先拿 canonModel 逐值比对，结果是"我改过的模型一律判成不属于本构型"，
+     切走再切回来改动就没了 —— 正好把要保存的东西当成异常拦掉了。 */
+function modelFitsConfig(m){
+  if(!m || !Array.isArray(m.links)) return false;
+  const cfg = (CONFIG && CONFIG.model) || null;
+  if(!cfg || !Array.isArray(cfg.links)) return true;      // 没有配置可比 ⇒ 放行
+  const name = L => (L && L.name) || '';
+  if(m.links.length !== cfg.links.length) return false;
+  for(let i = 0; i < cfg.links.length; i++){
+    if(name(m.links[i]) !== name(cfg.links[i])) return false;
+  }
+  return true;
+}
 function setModel(m, save){
   if(!m || !Array.isArray(m.links)){ alert('模型格式不对'); return; }
   MODEL = m; Q = []; closeForm();
@@ -509,7 +687,7 @@ function setModel(m, save){
   if(CONFIG) CONFIG.__arms = [m];
   document.getElementById('modal').classList.add('hidden');
   updateAll(); if(save !== false) saveLocal();
-  if(typeof renderAngles === 'function') renderAngles();   // 06-ui：刷新"旋转角度"滑条
+  refreshAnglesUI();                                        // 06-ui：刷新"旋转角度"滑条
   if(typeof renderVehicle === 'function') renderVehicle(); // 06-ui：刷新"装配参数"
 }
 
@@ -673,27 +851,54 @@ document.getElementById('mLast').onclick = () => {
 
 /* 自检钩子：#demo 直接载入示例；#dump 把浏览器算出来的各坐标系数据铺满屏幕（供无头截图核对） */
 window.addEventListener('DOMContentLoaded', () => {
-  /* ★ 先把配置装上 —— 模型 / 规则 / 车体尺寸全部来自配置，引擎不自带 */
-  let cfgId = null;
-  try{ const s = localStorage.getItem('armBuilderCfg'); if(s) cfgId = JSON.parse(s).configId; }catch(e){}
-  applyConfig(cfgId && CONFIGS[cfgId] ? cfgId : DEFAULT_CONFIG_ID);
+  /* ★ 先把配置装上 —— 模型 / 规则 / 车体尺寸全部来自配置，引擎不自带。
+     存档里记着"上次用的是哪个配置"就把它装上（原来固定回默认配置，
+     表现是"换了构型、重开又变回去了"）。 */
+  const wantCfg = savedConfigId();
+  applyConfig(wantCfg && CONFIGS[wantCfg] ? wantCfg : DEFAULT_CONFIG_ID);
+  migrateOldArchive();                       // 旧版那份不带后缀的存档，认领到当前构型名下
   initConfigSelector();
 
-  loadCfg();                                 // 再恢复上次的设置（位置/映射/采样数）
-  const last = loadLocal();
+  loadCfg();                                 // 先恢复"设置"（位置/映射/采样数/开关）
+  /* ★ 顺序要紧：模型在【后】，关节角在【最后】。
+     两个坑叠在一起，都踩过：
+       ① setModel() 会把 Q 清空（换了模型，旧角度没意义）⇒ 角度必须最后恢复；
+       ② setModel() 内部还会 saveLocal() 一次 —— 那一下写的是"角度还没恢复"的中间状态，
+          会把存档里的关节角覆盖成 0。所以这段必须先用 holdSave() 把落盘压住，
+          等关节角恢复完再统一写一次。 */
+  const last = loadLocal();                  // ★ 读的是【当前构型自己那份】存档
   document.getElementById('mLast').style.display = last ? '' : 'none';
   const h = location.hash;
-  if(h.indexOf('demosave') >= 0){            // 载入示例并【存档】（等同于在弹窗里点"使用示例"）
-    setModel(demoModel());
-  } else if(h.indexOf('demo') >= 0 || h.indexOf('dump') >= 0 || h.indexOf('anim') >= 0){
-    setModel(demoModel(), false);            // 不改写本机保存的模型
-    if(h.indexOf('dump') >= 0) doDump();
-  } else if(last){
-    setModel(last);                          // ★ 有存档就直接进去，不再每次弹窗
+  const fits = modelFitsConfig(last);        // 存档的模型对不对得上当前配置
+  holdSave(true);
+  try{
+    if(h.indexOf('demosave') >= 0){          // 载入示例并【存档】（等同于在弹窗里点"使用示例"）
+      setModel(demoModel());
+    } else if(h.indexOf('demo') >= 0 || h.indexOf('dump') >= 0 || h.indexOf('anim') >= 0){
+      setModel(demoModel(), false);          // 不改写本机保存的模型
+      if(h.indexOf('dump') >= 0) doDump();
+    } else if(fits){
+      setModel(last);                        // ★ 有存档就直接进去，不再每次弹窗
+    } else if(last){
+      /* 存档对不上当前构型：不套上去，但也不删 */
+      const t = document.getElementById('tools');
+      if(t && !document.getElementById('cfgWarn')){
+        const s = document.createElement('span');
+        s.id = 'cfgWarn'; s.className = 'chip';
+        s.style.cssText = 'border-color:#7a5a20;color:#ffb454';
+        s.textContent = '⚠ 本地存档对不上当前构型，已按配置载入';
+        t.insertBefore(s, t.firstChild);
+      }
+    }
+    if(fits) loadCfg({ qOnly: true });       // 模型定了，再恢复关节角
+  }finally{
+    holdSave(false);
   }
+  saveLocal();                               // 状态齐了，落一次盘（顶栏"已保存"也跟着亮）
   syncCfgInputs();
   if(typeof renderAngles === 'function') renderAngles();
   if(typeof renderVehicle === 'function') renderVehicle();
+  if(typeof markSaved === 'function') markSaved(true);   // 顶栏"已保存"的状态（不闪）
 });
 function doDump(){
   const F = fkAll(Q);

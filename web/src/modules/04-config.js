@@ -182,8 +182,33 @@ function initConfigSelector() {
     if (!confirm('切换到「' + CONFIGS[sel.value].label + '」？当前模型会被替换')) {
       sel.value = activeConfigId(); return;
     }
-    applyConfig(sel.value);
-    updateAll();
+    /* ★ 先给【切走的那条构型】落盘，再开始切换。
+       存档按 configId 分键，切之前不存就等于丢掉刚才那条臂上的改动。 */
+    if (typeof saveLocal === 'function') saveLocal();
+    /* ★ 切换途中禁止落盘：这段里模型/角度还没对上，
+       任何一次写到"新构型那条键"上都会把它写坏（踩过：切回来角度全零）。 */
+    if (typeof holdSave === 'function') holdSave(true);
+    try {
+      applyConfig(sel.value);
+      /* ★ 再把【切过来的这条构型】自己那份接上：上次在它上面改过的杆长/限位
+         应该还在（各存各的、互不覆盖）。顺序与启动时一致 ——
+         先设置、再模型、最后才恢复关节角（setModel 会清空 Q）。 */
+      if (typeof loadCfg === 'function') loadCfg();
+      const mine = (typeof loadLocal === 'function') ? loadLocal() : null;
+      const fits = (typeof modelFitsConfig === 'function') ? modelFitsConfig(mine) : !!mine;
+      if (mine && fits && typeof setModel === 'function') {
+        setModel(mine);                     // 内部会 updateAll + 重画面板（落盘被压住）
+        if (typeof loadCfg === 'function') loadCfg({ qOnly: true });   // 模型定了，再恢复关节角
+      } else {
+        updateAll();
+      }
+      /* 链结构变了（关节数/限位/杆长），"旋转角度"面板要跟着重画 */
+      if (typeof refreshAnglesUI === 'function') refreshAnglesUI();
+      if (typeof syncCfgInputs === 'function') syncCfgInputs();
+    } finally {
+      if (typeof holdSave === 'function') holdSave(false);
+    }
+    if (typeof saveLocal === 'function') saveLocal();   // 状态齐了，这时才写
   };
 }
 
