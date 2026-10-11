@@ -1,0 +1,61 @@
+/*  web/lib/assemble.js —— 模块合成器（唯一负责"源码 -> 单文件 HTML"的地方）
+
+    背景：交付物必须是【单文件、零依赖、双击就能开】，
+          但源码要能分模块维护。所以源码是模块，交付物是构建产物。
+
+    armBuilder.html 的组成：
+        web/src/apps/armBuilder.html        骨架模板（含 3 个 __MODULE 标记）
+      + web/src/modules/01-kinematics.js    运动学 / 模型 / 3D 渲染
+      + web/src/modules/02-task-rules.js    任务域 / 体素 / IK / 动画
+      + web/src/modules/03-chassis-size.js  底盘碰撞箱 / 伸展尺寸 / 面板
+
+    ★ 保证：合成结果与重构前的 armBuilder.html 逐字节相同（md5 5077ab35c6fd...）
+*/
+'use strict';
+const fs = require('fs'), path = require('path'), crypto = require('crypto');
+
+const WEB = path.join(__dirname, '..');           // web/
+const SRC = path.join(WEB, 'src');
+const ROOT = path.join(WEB, '..');                // 仓库根
+
+const TEMPLATE = path.join(SRC, 'apps', 'armBuilder.html');
+const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size'];
+
+const read = p => fs.readFileSync(p, 'utf8');
+const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex');
+
+/* 把骨架里的 <!--__MODULE:name__--> 替换成模块源码 */
+function embedModules(template, modDir) {
+  let out = template;
+  for (const name of MODULES) {
+    const marker = '<!--__MODULE:' + name + '__-->';
+    if (!out.includes(marker)) throw new Error('模板里没有标记 ' + marker);
+    out = out.replace(marker, () => read(path.join(modDir, name + '.js')));
+  }
+  return out;
+}
+
+/* 读骨架模板 */
+function readTemplate() { return read(TEMPLATE); }
+
+/* 合成 armBuilder.html 的完整文本 */
+function buildArmBuilder() {
+  return embedModules(readTemplate(), path.join(SRC, 'modules'));
+}
+
+/* 写文件（LF，不加 BOM），并返回 md5 */
+function writeLF(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text, 'utf8');
+  return md5(text);
+}
+
+/* 给生成物加一行"这是构建产物"的头注释 */
+function banner(kind, extra) {
+  return '<!-- ' + kind + '：构建产物，请勿直接编辑 · ' + extra +
+         ' · 改源码后跑 node web/build.js -->\n';
+}
+
+module.exports = { WEB, SRC, ROOT, TEMPLATE, MODULES,
+                   read, md5, embedModules, readTemplate,
+                   buildArmBuilder, writeLF, banner };

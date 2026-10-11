@@ -14,8 +14,8 @@
 
 | 工具 | 回答的问题 |
 |---|---|
-| **`armBuilder.html`** | 这套杆长/限位，**够得到哪些位姿**？可达集长什么样？比赛三级任务域能覆盖多少？ |
-| **`armLink.html`** | 关节限位**一个字不动**的前提下，**哪几根杆值得改、改成多少**，任务适应性最好？ |
+| **`build/armBuilder.html`** | 这套杆长/限位，**够得到哪些位姿**？可达集长什么样？比赛三级任务域能覆盖多少？ |
+| **`build/armLink.html`** | 关节限位**一个字不动**的前提下，**哪几根杆值得改、改成多少**，任务适应性最好？ |
 
 具体能做的事：
 
@@ -31,7 +31,7 @@
   最大化严格合格率（位置<3mm、姿态<3°、**且最紧关节裕度>5°**）。
 - **装配动画**：核心本体固定不动、只有 Q 轴组件在动的五段式插入演示。
 
-### 一个实测结论（详见 [`t11_连杆改进报告.md`](t11_连杆改进报告.md)）
+### 一个实测结论（详见 [`docs/notes/t11_连杆改进报告.md`](docs/notes/t11_连杆改进报告.md)）
 
 | 改动 | 杆长和 | 严格合格率 | 分数 |
 |---|---|---|---|
@@ -46,23 +46,65 @@
 
 ## 用什么写的
 
-**没有构建步骤，没有 npm 依赖，没有第三方库。** 全部手写。
+**没有构建依赖，没有 npm 包，没有第三方库。** 全部手写。
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| 交互工具 | **纯 HTML + CSS + 原生 JavaScript**（ES6） | 4 个 HTML 各是**单文件**，三维视图用 **Canvas 2D 手绘**，无 three.js / 无 CDN |
+| 交互工具 | **纯 HTML + CSS + 原生 JavaScript**（ES6） | 交付物是**单文件**，三维视图用 **Canvas 2D 手绘**，无 three.js / 无 CDN |
+| 源码组织 | 分模块 + **一个 80 行的构建脚本**（Node，无依赖） | 源码在 `web/src/`，`node web/build.js` 合成单文件交付物 |
 | 运动学 | 手写齐次变换递推 | 浏览器内正解 `T_i = T_{i-1}·Trans(offset_i)·Rot(axis_i,q_i)`，含 LM 阻尼最小二乘 IK |
 | 模型格式 | **JSON** | `{name, links:[{name,pos,rot,axis,limits,type}]}`，可直接用「读取文件」载入 |
 | 本地存档 | **localStorage** | 界面参数（装配位、安装 yaw、映射、采样数、底盘尺寸）刷新不丢 |
-| 数值校验 | **MATLAB R2025b** + Robotics System Toolbox | `rigidBodyTree` / `generalizedInverseKinematics`；另有纯 MATLAB 参考正解 `chainFK.m`（不依赖工具箱） |
+| 数值校验 | **MATLAB R2025b** + Robotics System Toolbox | `rigidBodyTree` / `generalizedInverseKinematics`；另有纯 MATLAB 参考正解（不依赖工具箱） |
 | 可选 | Optimization Toolbox（`fmincon`） | 只有走约束优化时才需要 |
-| 自动化自检 | **Node.js**（无框架，纯脚本） | 30 个 `t*.js` 探针，用 Edge 无头 `--dump-dom` 跑真界面、**数 canvas 像素**做断言 |
+| 自动化自检 | **Node.js**（无框架，纯脚本） | 30 个探针，用 Edge 无头 `--dump-dom` 跑真界面、**数 canvas 像素**做断言 |
 
-**代码规模**：约 12.5 MB / 113 个文件，其中 `armBuilder.html` 1847 行、`armLink.html` 2765 行。
+**规模**：约 12.5 MB / 111 个文件。源码 `armBuilder` = 551 + 649 + 433 行模块 + 218 行骨架。
 正解已在浏览器 JS 与 MATLAB 之间**交叉验证**：位置误差 0 mm、姿态误差 1.1e-16。
 
-> `armLink.html` 是**生成**出来的：`node t11_patch.js` 把 `armBuilder.html` 原样读进来，
-> 只做 5 处替换后追加连杆模块。原文件的 3 个 `<script>` 逐字节不变，自检会核对哈希。
+---
+
+## 目录结构（按模块功能分）
+
+```
+├── build/                    ★ 交付物：单文件 HTML，双击即用
+│   ├── armBuilder.html         建模器（入库，clone 下来直接能开）
+│   ├── armLink.html            连杆调参（构建产物，不入库）
+│   └── armFeas.html            MATLAB 导出的快照（构建产物，不入库）
+│
+├── web/                      Web 工具：源码 / 自检 / 打包
+│   ├── build.js                ★ 构建入口：node web/build.js
+│   ├── src/
+│   │   ├── apps/armBuilder.html   骨架模板（含 3 个 __MODULE 标记）
+│   │   └── modules/
+│   │       ├── 01-kinematics.js     运动学 / 模型 / 3D 渲染      551 行
+│   │       ├── 02-task-rules.js     任务域 / 体素 / IK / 动画    649 行
+│   │       ├── 03-chassis-size.js   底盘碰撞箱 / 伸展尺寸 / 面板  433 行
+│   │       ├── t11_link_mod.js      连杆调参模块（追加到 armLink）
+│   │       └── t11_link_css.css     连杆调参样式
+│   ├── checks/                30 个无头自检探针（t*.js）+ t11_patch.js
+│   ├── lib/                   共用库（assemble 合成器 / paths 路径表）
+│   └── pack/                  打包分享
+│
+├── matlab/                   MATLAB 侧：数值实现与交叉验证
+│   ├── setup.m                ★ 加搜索路径（先跑这个）
+│   ├── model/                臂型定义 + 建树 + 正解
+│   │   └── armSpec.m            ★ 改臂型只改这个文件
+│   ├── core/                 可行性集计算、界面、导出
+│   │   └── armview.html         显示层模板（uihtml 与导出共用）
+│   └── checks/               10 个自检探针（t*.m / t*.py）
+│
+├── docs/
+│   ├── notes/                t11_连杆改进报告.md · t9_IK诊断报告.md
+│   ├── screenshots/          28 张界面截图
+│   └── data/                 示例臂模型 JSON + 探针产物（摘要/日志/CSV）
+│
+├── HISTORY.md                ★ 开发日志与踩坑记录（650 行，含全部 bug 复盘）
+└── README.md                 本文件
+```
+
+**分层原则**：`web/src` 是可编辑源码，`build/` 是构建产物，`docs/` 是文档与数据，
+`matlab/` 是数值侧。跨目录路径只在 `web/lib/paths.js` 里定义一次。
 
 ---
 
@@ -70,15 +112,17 @@
 
 ### 1. 主力工具（**不需要装任何东西**）
 
-直接**双击**这两个文件，浏览器打开即用：
+直接**双击**：
 
 | 文件 | 用途 |
 |---|---|
-| **`armBuilder.html`** | 建模器 —— 建坐标系链、看可达集、任务域校核、装配动画 |
-| **`armLink.html`** | 连杆调参 —— 在限位只读的前提下搜索最优杆长，右上角 **⛓ 连杆调参** |
+| **`build/armBuilder.html`** | 建模器 —— 建坐标系链、看可达集、任务域校核、装配动画 |
+| **`build/armLink.html`** | 连杆调参 —— 在限位只读的前提下搜索最优杆长，右上角 **⛓ 连杆调参** |
+
+`build/armBuilder.html` 已经入库，**clone 下来就能双击**。
+`build/armLink.html` 是构建产物，跑一次 `node web/build.js` 就有了。
 
 打开 `armBuilder.html` 会出现开始窗口，选 **`使用示例`** 就能看到同济示例臂（7 段链）。
-
 建议用较新版本的 Chrome / Edge / Firefox。页面**完全离线可用，断网也能跑**。
 
 **URL 快捷入口**（接在文件名后面）：
@@ -91,72 +135,75 @@
 | `#joints` | 直接展开关节滑条面板 |
 | `#dump` | 把浏览器算出的各坐标系数据铺满屏幕（用于和 MATLAB 对表） |
 
-例：`armBuilder.html#demo`
+例：`build/armBuilder.html#demo`
 
-### 2. MATLAB 侧（可选，用于数值交叉验证 / 批量计算）
+### 2. 改源码 → 重新构建
 
-需要 **MATLAB R2025b + Robotics System Toolbox**。把本仓库根目录加进路径后：
+交付物是**单文件**（双击即用），但源码是**分模块**的。
+改 `web/src/modules/*.js` 之后重新合成：
+
+```bash
+node web/build.js          # 在仓库根目录跑
+```
+
+构建日志会打印每个模块的 md5，改了哪个模块一眼能看出来。
+**构建是幂等的**，而且 `armBuilder.html` 的 md5 是**校验过的** —— 见下面"怎么保证没改坏"。
+
+### 3. MATLAB 侧（可选，用于数值交叉验证 / 批量计算）
+
+需要 **MATLAB R2025b + Robotics System Toolbox**：
 
 ```matlab
-cd <本仓库根目录>
+run('<本仓库>/matlab/setup.m')    % ① 加搜索路径（model / core / checks）
 
-app = armFeasApp;       % ① 打开界面：左控件 / 右 HTML 实时显示
-f   = app.export();     % ② 导出到固定的一份 armFeas.html
-P   = armFeasData(cfg); % ③ 只要数据、不要界面
+app = armFeasApp;                 % ② 打开界面：左控件 / 右 HTML 实时显示
+f   = app.export();               % ③ 导出到 <仓库>/build/armFeas.html
+P   = armFeasData(cfg);           % ④ 只要数据、不要界面
 ```
 
-改臂型**只需要改 `armSpec.m` 一个文件**：往 `spec` 里加一项，界面自动多出一行控件、
-HTML 自动多画一段杆和一条关节轴。
-`t2_app_smoke.m` 是无头自检（坐标系 / 偏移 / 关节轴 / 限位逐项断言 + 三关节回归）。
+改臂型**只需要改 `matlab/model/armSpec.m` 一个文件**：往 `spec` 里加一项，
+界面自动多出一行控件、HTML 自动多画一段杆和一条关节轴。
 
-### 3. 无头自检（可选，需要 Node.js + Edge）
+> ⚠ 本次重构**没有在 MATLAB 上实跑过**（开发机没装 MATLAB）。
+> 改动是机械性的：`addpath(here)` → `run(.../matlab/setup.m)`、产物路径改到 `docs/` 与 `build/`。
+> 第一次在装有 MATLAB 的机器上跑时请留意 `matlab/checks/t2_app_smoke.m` 的输出。
 
-**必须在仓库根目录执行**（脚本按相对路径找 `armBuilder.html`）：
+### 4. 无头自检（可选，需要 Node.js + Edge）
+
+**必须在仓库根目录执行**：
 
 ```bash
-node t10_chassis_size.js       # 39 项几何 / 面板断言
-node t10_ui_probe.js --run     # 50 项界面断言（Edge 无头），含数 canvas 像素
-node t11_link_tune.js          # 60 项：只追加生成 / 限位只读 / 可复现 / 原功能回归
-node t11_ui_probe.js --run     # 54 项：真点按钮（开面板→评估→搜索→应用→恢复）
-node t11_search.js --big       # 离线跑连杆搜索 → t11_best.json
-node t11_verify.js             # 候选 × 多套独立位姿集复核（防过拟合）
-node t11_patch.js              # 改过连杆模块后重新生成 armLink.html
+node web/build.js                    # 先构建（自检读的是 build/ 里的产物）
+node web/checks/t10_chassis_size.js  # 39 项几何 / 面板断言
+node web/checks/t10_ui_probe.js  --run   # 50 项界面断言（Edge 无头），含数 canvas 像素
+node web/checks/t11_link_tune.js     # 60 项：只追加生成 / 限位只读 / 可复现 / 原功能回归
+node web/checks/t11_ui_probe.js  --run   # 54 项：真点按钮（开面板→评估→搜索→应用→恢复）
+node web/checks/t11_search.js --big  # 离线跑连杆搜索 → docs/data/t11_best.json
+node web/checks/t11_verify.js        # 候选 × 多套独立位姿集复核（防过拟合）
+node web/checks/t11_patch.js         # 只重建 armLink（需 build/armBuilder.html 已最新）
 ```
 
-### 4. 打包分享
+当前全绿：**39 + 60 + 50 + 54 = 203 项断言全部通过**。
+
+### 5. 打包分享
 
 ```bash
-node t10_pack.js               # 打成一个 zip 放进 ..\Pack\（工具本体 / README / 示例臂 / MATLAB 校验 / 截图）
+node web/pack/t10_pack.js      # 打成一个 zip 放进 ../Pack/
 ```
 
 ---
 
-## 仓库结构
+## 怎么保证"整理"没把东西改坏
 
-```
-├── armBuilder.html          ★ 主力工具：建模器（单文件零依赖）
-├── armLink.html             ★ 连杆调参器（由 t11_patch.js 生成）
-├── armview.html             显示层（uihtml 与独立 HTML 共用）
-├── armFeas.html             MATLAB 导出的快照（可由 app.export() 反复覆盖）
-│
-├── armSpec.m                ★ 当前臂型定义 —— 改臂型只改这个文件
-├── buildChain.m             由 spec 建 rigidBodyTree
-├── chainFK.m                纯 MATLAB 正解参考实现（不依赖工具箱）
-├── armFeasData.m            核心计算：采样 → 月牙过滤 → 正解 → 统计
-├── armFeasApp.m             交互界面（控件由 spec 动态生成）
-├── batchFK.m / rotDeg.m / crescentMargin.m / crescentBounds.m / makeArm.m
-│
-├── t*.m / t*.js / t*.py     30 个验证探针脚本（t0~t11，按开发阶段编号）
-│
-├── t11_连杆改进报告.md        ★ 连杆优化报告：哪根杆值得改
-├── t9_IK诊断报告.md          IK 成功率为何不是 100% 的完整诊断
-├── HISTORY.md                ★ 开发日志与踩坑记录（650 行，含全部 bug 复盘）
-│
-├── 示例臂_推荐连杆D.json      推荐方案的完整模型（拖进工具即可看）
-├── 示例臂_link4弄直.json      对照实验：把 link4 的 30mm 侧偏弄直
-├── 示例臂_横偏45.json         对照实验：横偏缩到 45
-└── *.png / *.csv            界面截图与探针产物
-```
+重构最容易出的事就是"整理完跑不起来了"。这次用了可验证的做法：
+
+1. **逐字节比对**。抽模块之前先把 `armBuilder.html`、`armLink.html`、`armFeas.html`
+   的 md5 存下来；合成之后 `web/build.js` **自己会断言** `armBuilder.html` 的 md5
+   等于重构前的 `5077ab35c6fd...`，不等就直接报错退出。
+2. **自检兜底**。203 项无头断言全部重跑，包括
+   `t11_link_tune.js` 里那条"原 3 个 `<script>` 与 armLink 逐字节相同"的比对。
+3. **入库门槛**。`web/build.js` 里的 `EXPECTED_ARM_BUILDER_MD5` 是**故意写死**的：
+   以后谁无意中改了模块导致产物变化，构建会立刻失败，必须显式更新这个常量。
 
 ---
 
@@ -176,6 +223,10 @@ node t10_pack.js               # 打成一个 zip 放进 ..\Pack\（工具本体
 4. **样本占比 ≠ 体积占比**：任务空间点云由关节空间均匀采样得到，需要精确体积请看体素数。
 5. **连杆改不出「绕 Q 轴自转」**：6 个关节里没有「绕插入轴」那一级，
    绕插入轴能连续转过的弧中位只有 30°，这是轴系拓扑决定的，改长度解决不了，得补腕部 roll。
+6. **界面脚本之间仍靠共享全局变量耦合**。这次只把 3 个大 `<script>` 拆成了 3 个文件
+   （内容一个字节没动），**没有**动它们之间的调用方式 ——
+   `MODEL` / `CHAIN` / `Q` 等仍是跨模块全局。彻底解耦需要改运行时设计，
+   会破坏"逐字节相同"这条安全绳，留作后续。
 
 完整的踩坑清单（15 条 + 每个 bug 的复现与修法）在 **[`HISTORY.md`](HISTORY.md)**。
 
@@ -186,3 +237,7 @@ node t10_pack.js               # 打成一个 zip 放进 ..\Pack\（工具本体
 本仓库的 `README.md` 曾是 650 行的开发日志，2026-10 拆分为两部分：
 面向使用者的说明留在这里（本文件），开发过程、bug 复盘与实测数据移到
 **[`HISTORY.md`](HISTORY.md)**。
+
+同月做了**模块化重整**：按功能分出 `web/` `matlab/` `docs/` `build/`，
+把 `armBuilder.html` 里 1633 行内联脚本抽成 3 个模块 + 一个构建脚本，
+产物与重构前**逐字节相同**。

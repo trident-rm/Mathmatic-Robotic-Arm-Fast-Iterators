@@ -1,5 +1,24 @@
 # HISTORY — 开发日志与踩坑记录（机械臂可行性集工具）
 
+> **2026-10 模块化重整后，本文里的文件名位置变了。** 阅读时的对照关系：
+>
+> | 本文提到的 | 现在在哪 |
+> |---|---|
+> | `armBuilder.html`（源码） | `web/src/apps/` + `web/src/modules/`（构建产物在 `build/`） |
+> | `armLink.html` / `armFeas.html` | `build/`（构建产物，不入库） |
+> | `armSpec.m` / `buildChain.m` / `chainFK.m` / `rotDeg.m` / `makeArm.m` | `matlab/model/` |
+> | `armFeasApp.m` / `armFeasData.m` / `armFeasExport.m` / `batchFK.m` / `crescent*.m` / `armview.html` | `matlab/core/` |
+> | `t*.m` | `matlab/checks/` |
+> | `t*.js` / `t9_load.js` / `t11_patch.js` | `web/checks/` |
+> | `t10_pack.js` | `web/pack/` |
+> | `t11_link_mod.js` / `t11_link_css.css` | `web/src/modules/` |
+> | `*.png` | `docs/screenshots/` |
+> | `*_summary.txt` / `*.csv` / `*.log` / `t11_*.json` / `示例臂_*.json` | `docs/data/` |
+> | `t9_IK诊断报告.md` / `t11_连杆改进报告.md` | `docs/notes/` |
+>
+> 下文出现的 `cd <本仓库根目录>`、相对路径等都按上表理解。**本文其余内容保持原样未改** ——
+> 它是当时的工作记录，不该被事后美化。
+
 > 目的：只给「杆 + 关节 + 坐标系 + 角度限位」，快速算出**带限位的可达集**，便于迭代臂型。
 
 ## 0. 三种用法
