@@ -500,6 +500,45 @@ function lsCfgKey(cfgId){
   const id = cfgId || ((typeof activeConfigId === 'function') ? activeConfigId() : null);
   return id ? (LS_CFG_PREFIX + ':' + id) : LS_CFG_OLD;
 }
+/* ---------------- 把本地存档导成一份 JSON（交给别人 / 进版本管理） ----------------
+   为什么需要它：在界面上调的参数（装配位、底盘箱、显示开关、关节角…）全部存在
+   浏览器 localStorage 里，按构型分键。它们【不会】跟着 git 走，
+   别人也拿不到；原来只有"保存 JSON"能导出【模型】，设置没有出口。
+   ★ 读的是存档原文，不重新计算 —— 这样"导出的东西 == 你调出来的东西"是硬的。 */
+function exportLocalSettings(){
+  const out = { exportedAt: new Date().toISOString(),
+                configId: (typeof activeConfigId === 'function') ? activeConfigId() : null,
+                keys: {} };
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(!k || k.indexOf('armBuilder') !== 0) continue;
+      const raw = localStorage.getItem(k);
+      let v = raw;
+      try{ v = JSON.parse(raw); }catch(e){}
+      out.keys[k] = v;
+    }
+  }catch(e){ warnNoLS(); }
+  return out;
+}
+/* 前两个参数对应 `downloadJson(obj, filename)` 的习惯写法 */
+function downloadLocalSettings(){
+  const data = exportLocalSettings();
+  const name = 'armBuilder-存档-' + (data.configId || 'unknown') + '.json';
+  try{
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name.replace(/[\\/:*?"<>|]/g, '_');
+    a.click();
+    return name;
+  }catch(e){ return '导出失败：' + e.message; }
+}
+/* 没地方挂按钮，就挂在 window 上：浏览器控制台一句 downloadLocalSettings() 即可。
+   （不做成按钮是为了不挤顶栏；这是个"偶尔用一次"的工具） */
+window.downloadLocalSettings = downloadLocalSettings;
+window.exportLocalSettings = exportLocalSettings;
+
 /* 上次用的是哪个配置？
    ★ 不能靠"扫一遍 armBuilderCfg:* 取第一个" —— 每条构型都有自己的存档，
      遍历顺序是插入顺序，取到的很可能是最早那条，不是最后用的那条（踩过）。
