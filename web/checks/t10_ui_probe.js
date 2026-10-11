@@ -89,25 +89,18 @@ window.addEventListener('DOMContentLoaded', () => {           // 注册在最后
   /* ---- ②b 一键按钮：同时隐藏/显示【两个框】（限制球不受影响） ---- */
   SHOWBOX.chassis = SHOWBOX.lwh = true; syncBoxChecks(); draw();
   const yOn = count(YEL,tY), tOn = count(TEA,tT), pOn = count(isPur);
-  ok($('btnFrames').textContent.indexOf('隐藏框') >= 0, '两个框开着时按钮写"隐藏框"',
-     $('btnFrames').textContent);
-  $('btnFrames').onclick();
-  ok(SHOWBOX.chassis === false && SHOWBOX.lwh === false, '点一下按钮 ⇒ 两个框同时关掉');
-  ok($('cbChassis').checked === false && $('cbLWH').checked === false, '两个复选框也跟着取消勾选');
-  ok($('btnFrames').textContent.indexOf('显示框') >= 0, '按钮文案变成"显示框"', $('btnFrames').textContent);
-  draw();
-  ok(count(YEL,tY) < yOn*0.1 && count(TEA,tT) < tOn*0.1,
-     '两个框的像素都归零（黄 '+yOn+'→'+count(YEL,tY)+' · 青 '+tOn+'→'+count(TEA,tT)+'）');
-  ok(count(isPur) > pOn*0.9, '★ 限制球【不受】按钮影响（紫 '+pOn+'→'+count(isPur)+'）');
-  $('btnFrames').onclick();
-  ok(SHOWBOX.chassis === true && SHOWBOX.lwh === true &&
-     $('cbChassis').checked && $('cbLWH').checked, '再点一下 ⇒ 两个框都回来');
-  ok($('btnFrames').textContent.indexOf('隐藏框') >= 0, '按钮文案又变回"隐藏框"');
-
-  /* ---- ②c 单独勾选仍然有效（按钮只是批量操作） ---- */
-  $('cbLWH').checked = false; $('cbLWH').onchange({target:{checked:false}}); draw();
-  ok(count(TEA,tT) < tOn*0.1 && count(YEL,tY) > yOn*0.9, '单独关长宽高框：只关它，底盘框还在');
-  ok($('btnFrames').textContent.indexOf('隐藏框') >= 0, '还剩一个框开着 ⇒ 按钮仍是"隐藏框"');
+  /* 改版：四个显示开关收进一个下拉菜单（#btnVis + #visMenu），
+     原来那个"一键隐藏框"按钮已经删掉。这里验的是"菜单能开关、勾选状态跟着走"。 */
+  ok(!!$('btnVis') && !!$('visMenu'), '顶栏有「👁 显示」下拉与它的菜单');
+  ok($('visMenu').querySelectorAll('input[type=checkbox]').length === 4,
+     '菜单里有 4 个勾选项（坐标架/底盘框/长宽高框/限制球）');
+  ok($('cbChassis').checked === true && $('cbLWH').checked === true,
+     '两个框默认是勾上的');
+  SHOWBOX.chassis = SHOWBOX.lwh = false; syncVisMenu();
+  ok($('cbChassis').checked === false && $('cbLWH').checked === false,
+     '改 SHOWBOX 后 syncVisMenu() 会把勾选取消');
+  SHOWBOX.chassis = SHOWBOX.lwh = true; syncVisMenu();
+  ok($('cbChassis').checked === true && $('cbLWH').checked === true, '再同步一次 ⇒ 勾回来');
   $('cbLWH').checked = true; $('cbLWH').onchange({target:{checked:true}}); draw();
 
   /* ---- ③ 设置面板：改值 → 即时生效 ---- */
@@ -137,7 +130,7 @@ window.addEventListener('DOMContentLoaded', () => {           // 注册在最后
   ok(SIZEINFO().C.length === 3, '切"相对整机原点"后不报错');
 
   /* ---- ④ 右栏上下分隔条：拖动改「模型链 / 可达域」高度 ---- */
-  const sp = $('split'), listEl = $('list'), panEl = $('dataPanel');
+  const sp = $('split'), listEl = $('bdList'), panEl = $('bdData');
   ok(!!sp && !!listEl && !!panEl, '分隔条 #split 存在');
   const m1 = listEl.getBoundingClientRect().height, m2 = panEl.getBoundingClientRect().height;
   ok(m1 > 150, '默认比例下模型链有 ' + m1.toFixed(0) + 'px（不再只有 ~130px 那么挤）');

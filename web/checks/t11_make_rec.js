@@ -8,9 +8,9 @@
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
 const P = require('../lib/paths');
-const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
+const { A, LINK } = loadEnv({ variants:false, link:true });
 A.buildChain();
-const L = sandbox.LINK;
+const L = LINK;
 L.init(true);
 const KN = L.knobs();
 

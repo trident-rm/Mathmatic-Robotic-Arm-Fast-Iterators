@@ -3,8 +3,7 @@
            node t11_link_tune.js --quick     （约 15 s）
 
     检什么：
-      ⓪ 生成一致性：armLink.html 里"原脚本"必须与 armBuilder.html 逐字节相同；
-         版本注释里的模块/css md5 必须与源文件一致（防止"改了源没重新生成"）
+      ⓪ 装载方式：连杆模块能作为纯引擎挂进 armBuilder 的沙箱（不依赖额外构建产物）
       ① 限位只读：init / eval / sweep / search / apply / revert 全程限位签名不变，
          且 MODEL.links[*].limits 的 JSON 快照不变
       ② 旋钮与位姿集：自动生成规则、位姿集确定性、随种子变化、nPose 是嵌套前缀、
@@ -29,45 +28,25 @@ const ok = (c, msg, extra) => {
 const near = (a,b,tol) => Math.abs(a-b) <= (tol === undefined ? 1e-9 : tol);
 const md5 = s => crypto.createHash('md5').update(s, 'utf8').digest('hex').slice(0,12);
 
-/* ================= ⓪ 生成一致性 ================= */
-console.log('\n=== ⓪ armLink.html 是不是"只追加"生成的 ===');
-/* 统一成 LF 再比：交付物是 LF 合成的，工作区可能因 core.autocrlf 是 CRLF */
+/* ================= ⓪ 连杆模块能当纯引擎挂上 ================= */
+console.log('\n=== ⓪ 连杆引擎的装载方式 ===');
+/* 原来这一节验的是"build/armLink.html 是不是只追加生成的"。
+   现在 UI 上的「机械臂构型改进」面板已按要求删除、armLink.html 不再构建，
+   所以改成验【新的装载方式】：模块源码追加进 armBuilder 的沙箱即可用，
+   不再依赖任何额外构建产物。 */
 const rl = p => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-const src    = rl(path.join(dir,'..','..','build','armBuilder.html'));
-const out    = rl(path.join(dir,'..','..','build','armLink.html'));
 const modSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_mod.js'));
-const cssSrc = rl(path.join(dir, '..', 'src', 'modules', 't11_link_css.css'));
-const blocks = html => [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-const SB = blocks(src), OB = blocks(out);
-/* armBuilder 的 script 块数由构建决定（配置层加过一个 ⇒ 现在 4 个），
-   不写死数字：只要求 armLink 恰好比 armBuilder 多一个，且多出来的那个是连杆模块。 */
-const NMOD = SB.length;
-ok(SB.length >= 1 && OB.length === NMOD + 1,
-   'armLink 只比 armBuilder 多一个 script（armBuilder ' + NMOD + ' 个 / armLink ' + OB.length + ' 个）',
-   [SB.length, OB.length]);
-ok(SB.every((b,i)=> b === OB[i]), '原脚本逐字节全部相同 —— 没有动过原逻辑', SB.map((b,i)=>b===OB[i]));
-ok(OB[NMOD].indexOf('连杆调参') >= 0, '最后那个 script 就是连杆模块');
-ok(OB[NMOD].trim() === modSrc.trim(), '模块源码与 t11_link_mod.js 一字不差');
-const ver = /armLink：由 t11_patch.js 生成 · armBuilder\((\w+)\) \+ 连杆模块\((\w+)\) · css\((\w+)\)/.exec(out);
-ok(!!ver, '版本注释存在');
-if(ver){
-  ok(ver[1] === md5(src), '版本注释里的 armBuilder md5 对得上', [ver[1], md5(src)]);
-  ok(ver[2] === md5(modSrc), '版本注释里的模块 md5 对得上（= 改过 t11_link_mod.js 就要重跑 t11_patch.js）', [ver[2], md5(modSrc)]);
-  ok(ver[3] === md5(cssSrc), '版本注释里的 css md5 对得上', [ver[3], md5(cssSrc)]);
-}
-/* 原 <style> 段（去掉追加的 CSS）也应完全一致 */
-const styleOf = h => /<style>([\s\S]*?)<\/style>/.exec(h)[1];
-ok(styleOf(out).replace(cssSrc, '') === styleOf(src), 'armLink 的 <style> = 原样式 + 我们的追加 css');
-const head = h => h.slice(h.indexOf('<body>'), h.indexOf('<script>'));
-const stripAdd = h => head(h).replace(/\s*<button id="btnLink"[\s\S]*?<\/button>/, '')
-                             .replace('<div id="lform"></div>\n      ', '').replace(/<!--[\s\S]*?-->\s*/g,'');
-ok(stripAdd(out) === stripAdd(src), 'body 里除「⛓ 连杆调参 按钮 + #lform 容器」外一字未改');
+ok(modSrc.length > 0, '连杆模块源码存在（' + modSrc.length + ' 字节）');
+ok(modSrc.indexOf('window.LINK') >= 0, '模块会挂 window.LINK（无头 API 入口）');
 
 /* ================= 载入两个文件 ================= */
-const envA = loadEnv({ variants:false, file:'armBuilder.html' });
-const envB = loadEnv({ variants:false, file:'armLink.html' });
-const A = envA.A, B = envB.A, LINK = envB.sandbox.LINK;
-ok(!!LINK, 'armLink 里 window.LINK 存在（无头 API）');
+/* 两套环境：纯 armBuilder（基准）与 挂了连杆模块的 armBuilder（被测） */
+const envA = loadEnv({ variants:false });
+const envB = loadEnv({ variants:false, link:true });
+const A = envA.A, B = envB.A, LINK = envB.LINK;
+ok(!!LINK, '连杆模块挂上后 window.LINK 存在（无头 API）');
+ok(typeof LINK.knobs === 'function' && typeof LINK.eval === 'function',
+   'LINK 的 knobs / eval 可用');
 
 /* ================= ⑦ 原功能回归（数值） ================= */
 console.log('\n=== ⑦ 原功能回归：同样的输入，两个文件算出来必须一样 ===');

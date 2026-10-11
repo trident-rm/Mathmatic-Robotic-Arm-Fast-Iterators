@@ -1,10 +1,10 @@
 [
  {
   "tag": "D A + 大臂235",
-  "score": 17.03,
+  "score": 16.43,
   "pass": 20.8,
   "margMed": 0,
-  "angMed": 0.76,
+  "angMed": 0.73,
   "found": 93.1,
   "armLen": 907.6,
   "reach": 861,
@@ -112,120 +112,8 @@
   ]
  },
  {
-  "tag": "F 工具120 + 横偏45",
-  "score": 15.96,
-  "pass": 15.3,
-  "margMed": 0,
-  "angMed": 1.05,
-  "found": 86.8,
-  "armLen": 932.6,
-  "reach": 887,
-  "posRate": 100,
-  "segs": [
-   0,
-   75,
-   290,
-   45,
-   402.59,
-   0,
-   120
-  ],
-  "links": [
-   {
-    "name": "link1.x",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link1.y",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link1.z",
-    "v0": 75,
-    "v": 75
-   },
-   {
-    "name": "link2.x",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link2.y",
-    "v0": 290,
-    "v": 290
-   },
-   {
-    "name": "link2.z",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link3.x",
-    "v0": 85.5,
-    "v": 45
-   },
-   {
-    "name": "link3.y",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link3.z",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link4.x",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link4.y",
-    "v0": -30,
-    "v": -30
-   },
-   {
-    "name": "link4.z",
-    "v0": 401.47,
-    "v": 401.47
-   },
-   {
-    "name": "link5.x",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link5.y",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "link5.z",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "gripper.x",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "gripper.y",
-    "v0": 0,
-    "v": 0
-   },
-   {
-    "name": "gripper.z",
-    "v0": 211,
-    "v": 120
-   }
-  ]
- },
- {
   "tag": "G 工具150 + 横偏30",
-  "score": 15.63,
+  "score": 16.04,
   "pass": 17.4,
   "margMed": 0,
   "angMed": 0.76,
@@ -336,23 +224,23 @@
   ]
  },
  {
-  "tag": "H 六根全改（圆整）",
-  "score": 14.35,
-  "pass": 15.3,
+  "tag": "F 工具120 + 横偏45",
+  "score": 15.69,
+  "pass": 16.7,
   "margMed": 0,
-  "angMed": 0.99,
-  "found": 89.6,
-  "armLen": 897.8,
-  "reach": 800,
+  "angMed": 1.01,
+  "found": 86.8,
+  "armLen": 932.6,
+  "reach": 887,
   "posRate": 100,
   "segs": [
    0,
-   125,
-   235,
-   110,
-   287.84,
+   75,
+   290,
+   45,
+   402.59,
    0,
-   140
+   120
   ],
   "links": [
    {
@@ -368,7 +256,7 @@
    {
     "name": "link1.z",
     "v0": 75,
-    "v": 125
+    "v": 75
    },
    {
     "name": "link2.x",
@@ -378,7 +266,7 @@
    {
     "name": "link2.y",
     "v0": 290,
-    "v": 235
+    "v": 290
    },
    {
     "name": "link2.z",
@@ -388,7 +276,7 @@
    {
     "name": "link3.x",
     "v0": 85.5,
-    "v": 110
+    "v": 45
    },
    {
     "name": "link3.y",
@@ -408,12 +296,12 @@
    {
     "name": "link4.y",
     "v0": -30,
-    "v": -85
+    "v": -30
    },
    {
     "name": "link4.z",
     "v0": 401.47,
-    "v": 275
+    "v": 401.47
    },
    {
     "name": "link5.x",
@@ -443,17 +331,17 @@
    {
     "name": "gripper.z",
     "v0": 211,
-    "v": 140
+    "v": 120
    }
   ]
  },
  {
   "tag": "A 工具150 + 横偏45",
-  "score": 14.32,
-  "pass": 16,
+  "score": 14.79,
+  "pass": 16.7,
   "margMed": 0,
-  "angMed": 0.71,
-  "found": 92.4,
+  "angMed": 0.66,
+  "found": 93.1,
   "armLen": 962.6,
   "reach": 916,
   "posRate": 100,
@@ -560,8 +448,120 @@
   ]
  },
  {
+  "tag": "H 六根全改（圆整）",
+  "score": 14.35,
+  "pass": 15.3,
+  "margMed": 0,
+  "angMed": 0.97,
+  "found": 90.3,
+  "armLen": 897.8,
+  "reach": 800,
+  "posRate": 100,
+  "segs": [
+   0,
+   125,
+   235,
+   110,
+   287.84,
+   0,
+   140
+  ],
+  "links": [
+   {
+    "name": "link1.x",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link1.y",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link1.z",
+    "v0": 75,
+    "v": 125
+   },
+   {
+    "name": "link2.x",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link2.y",
+    "v0": 290,
+    "v": 235
+   },
+   {
+    "name": "link2.z",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link3.x",
+    "v0": 85.5,
+    "v": 110
+   },
+   {
+    "name": "link3.y",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link3.z",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link4.x",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link4.y",
+    "v0": -30,
+    "v": -85
+   },
+   {
+    "name": "link4.z",
+    "v0": 401.47,
+    "v": 275
+   },
+   {
+    "name": "link5.x",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link5.y",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "link5.z",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "gripper.x",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "gripper.y",
+    "v0": 0,
+    "v": 0
+   },
+   {
+    "name": "gripper.z",
+    "v0": 211,
+    "v": 140
+   }
+  ]
+ },
+ {
   "tag": "B A + 侧偏−85",
-  "score": 14.12,
+  "score": 14.21,
   "pass": 16,
   "margMed": 0,
   "angMed": 0.78,
@@ -673,11 +673,11 @@
  },
  {
   "tag": "C A + 肩高125",
-  "score": 13.61,
-  "pass": 14.6,
+  "score": 13.56,
+  "pass": 13.9,
   "margMed": 0,
-  "angMed": 0.76,
-  "found": 87.5,
+  "angMed": 0.79,
+  "found": 88.2,
   "armLen": 1012.6,
   "reach": 966,
   "posRate": 100,
@@ -785,11 +785,11 @@
  },
  {
   "tag": "基准（原臂）",
-  "score": 8.46,
-  "pass": 9.7,
+  "score": 9.91,
+  "pass": 11.8,
   "margMed": 0,
-  "angMed": 0.58,
-  "found": 83.3,
+  "angMed": 0.62,
+  "found": 84,
   "armLen": 1064.1,
   "reach": 979,
   "posRate": 77.08,
@@ -897,8 +897,8 @@
  },
  {
   "tag": "E A + 小臂275",
-  "score": 7.88,
-  "pass": 8.3,
+  "score": 8.78,
+  "pass": 9,
   "margMed": 0,
   "angMed": 0.89,
   "found": 86.8,

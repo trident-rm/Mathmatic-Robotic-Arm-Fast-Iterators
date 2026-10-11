@@ -1,7 +1,7 @@
 ﻿/*  t11_summary.js —— 出报告要用的几何数字（30k 采样的可达域对照） */
 const { loadEnv } = require('./t9_load.js');
-const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
-const L = sandbox.LINK;
+const { A, LINK } = loadEnv({ variants:false, link:true });
+const L = LINK;
 A.buildChain(); L.init(true);
 const NAMES = L.knobs().map(k=>k.name);
 const BASE = L.readModel();

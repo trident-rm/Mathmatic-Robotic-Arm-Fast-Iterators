@@ -1,5 +1,5 @@
 {
- "when": "2026-10-11T07:50:55.234Z",
+ "when": "2026-10-11T10:26:56.802Z",
  "budget": {
   "probe": {
    "nPose": 10,
@@ -14,10 +14,10 @@
  },
  "limits": "base_joint[不限] joint1[0,122] joint2[-90,200] joint3[不限] joint4[-16,220] joint5[不限]",
  "baseline": {
-  "score": 1.02,
-  "pass": 0,
+  "score": 4.64,
+  "pass": 4.2,
   "margMed": 0,
-  "angMed": 1.15,
+  "angMed": 0.77,
   "found": 70.8,
   "armLen": 1064.09,
   "reach": 979,

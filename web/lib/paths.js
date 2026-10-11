@@ -28,11 +28,9 @@ module.exports = {
   TEMPLATE:  path.join(WEB, 'src', 'apps', 'armBuilder.html'),
   MODULES:   path.join(WEB, 'src', 'modules'),
   LINK_MOD:  path.join(WEB, 'src', 'modules', 't11_link_mod.js'),
-  LINK_CSS:  path.join(WEB, 'src', 'modules', 't11_link_css.css'),
 
-  /* 构建产物 */
+  /* 构建产物（只剩 armBuilder；armLink 随连杆 UI 一起去掉）*/
   ARM_BUILDER: path.join(BUILD, 'armBuilder.html'),
-  ARM_LINK:    path.join(BUILD, 'armLink.html'),
   ARM_FEAS:    path.join(BUILD, 'armFeas.html'),
   ARM_VIEW:    path.join(ROOT, 'matlab', 'core', 'armview.html'),
 };

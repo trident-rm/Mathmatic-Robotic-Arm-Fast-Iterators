@@ -2,7 +2,7 @@
     返回 { A, V, sandbox }：A = 页面导出的 API，V = t9_variants.js 里的变体求解器
     用法： const { loadEnv } = require('./t9_load.js'); const {A,V} = loadEnv();
             带变体： loadEnv({variants:true})
-            t11：   loadEnv({file:'armLink.html'})
+           连杆引擎： loadEnv({link:true})   // 把 t11_link_mod.js 追加进沙箱
 
     ★ HTML 一律从 build/ 读（构建产物），源码在 web/src/。
       改完源码先跑 node web/build.js。                                              */
@@ -34,8 +34,20 @@ function loadEnv(opts){
   const html = fs.readFileSync(htmlPath, 'utf8');
   const blocks = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   if (blocks.length < 2) throw new Error('没抽到两个 script 块，实际 ' + blocks.length);
-  const extra = opts.variants === false ? '' :
+  let extra = opts.variants === false ? '' :
     fs.readFileSync(path.join(__dirname, 't9_variants.js'), 'utf8');
+
+  /* ★ 把连杆调参引擎（web/src/modules/t11_link_mod.js）按需加载进来。
+     原来这套自检要读 build/armLink.html；2026-10 把 UI 上的
+     「机械臂构型改进」面板删掉后，那个产物不再构建，
+     但引擎本身还有用（离线搜索/复核），所以改成：
+         在 armBuilder 的沙箱里【追加】连杆模块源码
+     不再依赖任何额外构建产物。
+     ⚠ 必须追加在 __api 之前（引擎顶层就会读 MODEL/CHAIN），所以用 pre 段。 */
+  let pre = '';
+  if (opts.link) {
+    pre = fs.readFileSync(path.join(P.MODULES, 't11_link_mod.js'), 'utf8');
+  }
   const sandbox = { console, Math, JSON, Date, performance:{ now:()=>Date.now() },
     requestAnimationFrame(){ return 0; }, cancelAnimationFrame(){}, setTimeout, clearTimeout,
     localStorage:{ getItem(){ throw new Error('stub'); }, setItem(){ throw new Error('stub'); } },
@@ -68,11 +80,23 @@ globalThis.__api = {
   get SIZER(){return SIZER},     set SIZER(v){SIZER=v},
   get SHOWBOX(){return SHOWBOX}, set SHOWBOX(v){SHOWBOX=v},
   get CLOUD(){return CLOUD},     set CLOUD(v){CLOUD=v} };`;
-  vm.runInContext(blocks.join('\n') + '\n' + epilogue + '\n' + extra, sandbox,
+  /* 顺序很讲究：
+       ① 模块（build/armBuilder 的 script）
+       ② 把模型建起来（连杆模块一加载就要读 MODEL/CHAIN 认基准）
+       ③ 连杆模块（可选）
+       ④ __api
+       ⑤ 变体（t9_variants.js）
+     —— ② 必须在 ③ 之前，否则连杆模块拿到的是空模型。 */
+  const boot = `
+MODEL = demoModel(); buildChain(); Q = new Array(NJ).fill(0);`;
+  vm.runInContext(blocks.join('\n') + '\n' + boot + '\n' + pre + '\n' +
+                  epilogue + '\n' + extra, sandbox,
                   { filename:'armBuilder+variants.js' });
   const A = sandbox.__api;
-  A.MODEL = A.demoModel(); A.buildChain(); A.Q = new Array(A.NJ).fill(0);
-  return { A, V: sandbox.__V, sandbox };
+  if (opts.link && !sandbox.LINK) {
+    throw new Error('要了 opts.link 但沙箱里没有 window.LINK —— 连杆模块没挂上？');
+  }
+  return { A, V: sandbox.__V, sandbox, LINK: sandbox.LINK };
 }
 
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0;

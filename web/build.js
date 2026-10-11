@@ -5,7 +5,6 @@
 
     产物（单文件、零依赖、双击就能开）：
         build/armBuilder.html    建模器
-        build/armLink.html       建模器 + 连杆调参
 
     日志会打印每个模块的 md5，改了哪个模块一眼能看出来。
     构建是幂等的：同样的源码一定得到同样的字节。
@@ -20,7 +19,7 @@ const A = require('./lib/assemble');
       web/src/configs/tongji.js，交付物里多了一段配置 + 一个启动块。
       搬的时候逐值对照过，同济示例的数值结果没有变（t12 会核对）。
    ★ 以后凡是"不该变却变了"的情况，这里会拦住 —— 改这个常量前先想清楚。 */
-const EXPECTED_ARM_BUILDER_MD5 = '60e1f10b9000798c8e0393c5c9b692cc';
+const EXPECTED_ARM_BUILDER_MD5 = '99dbb321b8f5f48a9a98585a7ecea944';
 
 const BUILD = path.join(A.ROOT, 'build');
 
@@ -72,21 +71,17 @@ if (gotMd5 !== EXPECTED_ARM_BUILDER_MD5) {
   log('    ✓ md5 ' + gotMd5.slice(0, 12) + ' —— 与基准一致');
 }
 
-/* ---- 3. 合成 armLink（= armBuilder + 连杆模块）---- */
-log('\n[3] 合成 build/armLink.html');
-const patch = require(path.join(A.WEB, 'checks', 't11_patch.js'));
-const r = patch.buildLink(armBuilder);
-A.writeLF(path.join(BUILD, 'armLink.html'), r.html);
-log('    armBuilder(' + r.srcMD5 + ') + 连杆模块(' + r.modMD5 + ') + css(' + r.cssMD5 + ')');
-log('    ✓ md5 ' + A.md5(r.html).slice(0, 12));
-
-/* ---- 4. 汇总 ---- */
+/* ---- 3. 汇总 ----
+   ※ 这里原来还会合成 build/armLink.html（armBuilder + 连杆调参模块）。
+     2026-10 按要求把「机械臂构型改进」那块 UI 删掉了，交付物只剩 armBuilder。
+     连杆搜索/复核引擎（web/src/modules/t11_link_mod.js）仍然保留，
+     但改成由自检按需挂载（loadEnv({link:true})），不再产出第二个 HTML。 */
 line();
 log('产物：');
-for (const f of ['armBuilder.html', 'armLink.html']) {
+for (const f of ['armBuilder.html']) {
   const p = path.join(BUILD, f);
   log('  build/' + f.padEnd(18) + String(fs.statSync(p).size).padStart(8) + ' 字节' +
       '   md5 ' + A.md5(fs.readFileSync(p, 'utf8')).slice(0, 12));
 }
-log('用法： 双击 build/armBuilder.html 或 build/armLink.html');
+log('用法： 双击 build/armBuilder.html');
 line();

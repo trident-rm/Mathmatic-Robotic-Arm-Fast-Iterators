@@ -7,8 +7,8 @@
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
 const P = require('../lib/paths');
-const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
-const L = sandbox.LINK;
+const { A, LINK } = loadEnv({ variants:false, link:true });
+const L = LINK;
 const dir = __dirname;
 A.buildChain(); L.init(true);
 

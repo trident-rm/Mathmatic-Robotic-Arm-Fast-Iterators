@@ -1,6 +1,6 @@
 ﻿/*  t11_roll_probe.js —— 绕插入轴（Q 轴）的"自转能力"探针（回答三级难度的 R4：绕 Q 轴转 ±90°）
     跑法： node t11_roll_probe.js            （约 1~2 min）
-           node t11_roll_probe.js --armLink  （改成量 armLink.html 的当前模型）
+           node t11_roll_probe.js --link      （改成量连杆模块里的当前模型）
 
     为什么单独一个探针、没做进 armLink 面板：
       它要解的是【位置3 + 两轴姿态2 + 自转角1 = 6 个约束 / 6 个关节】的位姿 IK，
@@ -11,10 +11,12 @@
           每个点用"上一个成功解"热启动；能连续命中的最长弧 = 该位姿的自转跨度。
 */
 const { loadEnv, mulberry32 } = require('./t9_load.js');
-const USE_AL = process.argv.includes('--armLink');
-const { A, sandbox } = loadEnv({ variants:false, file: USE_AL ? 'armLink.html' : 'armBuilder.html' });
+/* --link：把连杆模块挂进来量「当前模型」；默认量基准臂。
+   （原来靠 build/armLink.html，那个产物已随该 UI 面板一起去掉） */
+const USE_AL = process.argv.includes('--link') || process.argv.includes('--armLink');
+const { A, sandbox, LINK } = loadEnv({ variants:false, link: USE_AL });
 A.buildChain();
-const L = USE_AL ? sandbox.LINK : null;
+const L = USE_AL ? LINK : null;
 if(L){ L.init(true); }
 
 const V = {
@@ -102,7 +104,7 @@ for(let i=1;i<=NPOSE;i++){
 }
 const ROLLS = []; for(let r=-90;r<90;r+=15) ROLLS.push(r);
 const LIM = A.qLimits();
-console.log((USE_AL?'armLink 当前模型':'基准臂') + '：' + NPOSE + ' 个三级任务域位姿 × ' +
+console.log((USE_AL?'当前模型（连杆模块）':'基准臂') + '：' + NPOSE + ' 个三级任务域位姿 × ' +
             ROLLS.length + ' 个自转角（−90°~+90°，15° 步长）');
 console.log('判据：位置 <3mm 且 夹爪 y∥−e⃗、夹爪 x∥x(roll) 两轴都 <11.5°，命中即用该解热启动下一个角度\n');
 const spans = [], hits = [];

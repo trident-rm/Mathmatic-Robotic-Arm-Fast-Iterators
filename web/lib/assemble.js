@@ -19,8 +19,13 @@ const SRC = path.join(WEB, 'src');
 const ROOT = path.join(WEB, '..');                // 仓库根
 
 const TEMPLATE = path.join(SRC, 'apps', 'armBuilder.html');
-/* 引擎模块：顺序有意义，别乱调（变量声明与启动顺序都靠它） */
-const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size', '04-config'];
+/* 引擎模块：顺序有意义，别乱调（变量声明与启动顺序都靠它）
+   01~03 = 算（运动学 / 任务域 / 底盘尺寸）
+   04    = 配置层
+   06    = 界面骨架（折叠面板 / 勾选下拉 / 旋转角度表 / 分隔条）
+   ※ 没有 05：05 是 bootstrap，单独放在最后（在所有配置之后）
+   ※ 06 必须排在 01~03 之后：它在加载时就会读 SHOWBOX / SHOW_FRAMES / CHAIN */
+const MODULES = ['01-kinematics', '02-task-rules', '03-chassis-size', '04-config', '06-ui'];
 const BOOTSTRAP = '05-bootstrap';
 const CONFIG_DIR = path.join(SRC, 'configs');
 const CONFIG_INDEX = path.join(CONFIG_DIR, 'index.txt');

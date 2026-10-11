@@ -30,11 +30,68 @@
   #left{flex:1;border-right:1px solid var(--line)}
   #right{width:392px;background:var(--panel);display:flex;flex-direction:column}
   #list{flex:1 1 42%;overflow-y:auto;padding:8px 10px;min-height:90px}
-  #dataPanel{flex:1 1 58%;border-top:1px solid var(--line);display:flex;
-    flex-direction:column;min-height:120px;background:#111827}
-  #dataPanel .head{background:#0e1524;border-bottom:1px solid var(--line);padding:8px 12px;
-    display:flex;align-items:center;justify-content:space-between;gap:8px}
   #dataBody{flex:1;overflow-y:auto;padding:4px 12px 10px;font-size:11.5px;line-height:1.7;color:var(--dim)}
+
+  /* ---- 可折叠分区（模型链 / 旋转角度 / 可达域）---- */
+  .sect-hd{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;
+    background:#0e1524;border-bottom:1px solid var(--line);border-top:1px solid var(--line);
+    font-size:11.5px;font-weight:600;color:#9fd4ff;user-select:none;flex:0 0 auto}
+  .sect-hd:hover{background:#131c30}
+  .sect-hd .caret{color:#5d6b88;font-size:10px;transition:transform .12s}
+  .sect-hd.collapsed .caret{transform:rotate(-90deg)}
+  .sect-hd button{margin-left:auto}
+  .sect-bd{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .sect-bd.hidden{display:none}
+  #bdList{flex:1 1 40%;min-height:90px}
+  #bdQ{flex:0 0 auto;max-height:190px;overflow-y:auto}
+  #bdData{flex:1 1 40%;min-height:120px;background:#111827}
+
+  /* ---- 顶栏的勾选下拉 ---- */
+  .pop{position:absolute;display:none;z-index:40;background:#0b1020;border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);padding:7px 10px;min-width:132px}
+  .pop.on{display:block}
+  .pop label{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11.5px;
+    color:var(--fg);cursor:pointer;white-space:nowrap}
+  button.ghost{background:transparent;border-color:#2c3a58}
+
+  /* ---- 旋转角度表 ---- */
+  #qbody{padding:6px 12px 8px}
+  #qbody table{width:100%;border-collapse:collapse;font-size:11.5px}
+  #qbody td{border-bottom:1px solid #1e2740;padding:2px 4px}
+  #qbody td.nm{color:var(--dim)}
+  #qbody td.v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--fg)}
+  #qbody tr.hot td.v{color:#ffe066}
+  #qbody .axc{color:#8fa0bf}
+
+  /* ---- 新建向导 ---- */
+  #wiz{position:fixed;inset:0;background:rgba(6,9,17,.72);display:none;
+    align-items:center;justify-content:center;z-index:60}
+  #wiz.on{display:flex}
+  .wcard{width:560px;max-height:86vh;display:flex;flex-direction:column}
+  .wstep{display:flex;gap:6px;padding:0 0 12px;flex-wrap:wrap}
+  .wstep span{font-size:10.5px;color:#5d6b88;border:1px solid var(--line);border-radius:999px;
+    padding:2px 9px;white-space:nowrap}
+  .wstep span.on{color:#0b1020;background:#9fd4ff;border-color:#9fd4ff;font-weight:600}
+  .wstep span.done{color:var(--ok);border-color:#2c5a3a}
+  .wbody{flex:1;overflow-y:auto;min-height:190px;padding-right:2px}
+  .wbody h3{margin:0 0 4px;font-size:13px}
+  .wbody .sub{color:var(--dim);font-size:11px;margin:0 0 10px}
+  .wbody .two{display:flex;gap:10px}
+  .wbody .pick{flex:1;border:1px solid var(--line);border-radius:9px;padding:12px;
+    background:#121a29;cursor:pointer;text-align:center}
+  .wbody .pick:hover{border-color:#3d4c6e}
+  .wbody .pick.on{border-color:#9fd4ff;background:#16243c}
+  .wbody .pick b{display:block;font-size:13px;margin-bottom:4px}
+  .wbody .pick span{font-size:11px;color:var(--dim)}
+  .wfoot{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--line);margin-top:10px}
+  .wspacer{flex:1}
+  .segrow{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:7px;background:#121a29}
+  .segrow .t{font-size:11.5px;font-weight:600;margin-bottom:6px;color:#9fd4ff}
+  .segrow .f{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:5px 7px;align-items:center}
+  .segrow .f label{font-size:11px;color:var(--dim)}
+  .segrow input,.segrow select{width:100%}
+  .del{margin-left:auto;color:#ff8a8a;background:transparent;border-color:#4a2530;padding:1px 7px}
+
   #dataBody b{color:var(--fg)}
   #dataBody table{width:100%;border-collapse:collapse;margin:2px 0 4px}
   #dataBody td,#dataBody th{border-bottom:1px solid #1e2740;padding:2px 4px;text-align:left;font-weight:400}
@@ -113,65 +170,83 @@
     <div><div id="title">机械臂可行性集 · 建模器</div><div id="model"></div></div>
     <div class="chips" id="chips"></div>
     <div id="tools">
-      <label class="k">配置
-        <select id="selConfig" title="构型 = 臂型 + 规则 + 车体尺寸；在 web/src/configs/ 里加文件即可扩充"></select>
+      <label class="k" title="构型 = 臂型 + 规则 + 车体尺寸；在 web/src/configs/ 里加文件即可扩充">配置
+        <select id="selConfig"></select>
       </label>
-      <label class="k">装配臂位置
+      <label class="k" title="装配臂在任务坐标系(OXYZ)下的位置；影响任务域校核与插入姿态">装配臂位置
         <input type="number" id="inCx" step="10" value="-200" style="width:64px">
         <input type="number" id="inCy" step="10" value="-200" style="width:64px">
         <input type="number" id="inCz" step="10" value="800"  style="width:64px">
       </label>
-      <label class="k">安装yaw
+      <label class="k" title="臂本体装在车上的朝向（绕竖直轴）；决定整车系与臂基座系的夹角">安装yaw
         <input type="number" id="inYaw" step="15" value="-90" style="width:62px">
       </label>
-      <label class="k">映射
+      <label class="k" title="任务坐标系三轴与整车系的对应关系">映射
         <select id="selMap">
-          <option value="swap">核心在前 (X_b=−X_O, Y_b=−Y_O)</option>
-          <option value="side">核心在侧 (X_b=−Y_O, Y_b=+X_O)</option>
+          <option value="swap">核心在前</option>
+          <option value="side">核心在侧</option>
         </select>
       </label>
-      <label class="k"><input type="checkbox" id="cbFrames" checked> 坐标架</label>
-      <label class="k"><input type="checkbox" id="cbChassis" checked> 底盘框</label>
-      <label class="k"><input type="checkbox" id="cbLWH" checked> 长宽高框</label>
-      <label class="k"><input type="checkbox" id="cbBall" checked> 球</label>
-      <button id="btnFrames">▣ 隐藏框</button>
-      <label class="k">采样
+      <button id="btnVis" title="显示哪些参考框：坐标架 / 底盘框 / 长宽高框 / 限制球">👁 显示</button>
+      <div class="pop" id="visMenu">
+        <label><input type="checkbox" id="cbFrames" checked> 坐标架</label>
+        <label><input type="checkbox" id="cbChassis" checked> 底盘框</label>
+        <label><input type="checkbox" id="cbLWH" checked> 长宽高框</label>
+        <label><input type="checkbox" id="cbBall" checked> 限制球</label>
+      </div>
+      <label class="k" title="随机采样点数：越多可达集越准，越慢">采样
         <select id="selN">
           <option value="10000">1万</option>
           <option value="30000" selected>3万</option>
           <option value="100000">10万</option>
         </select>
       </label>
-      <button id="btnChassis">▦ 底盘 / 尺寸</button>
-      <button id="btnSave">保存 JSON</button>
-      <button id="btnLoad">读取文件</button>
-      <button id="btnDemo">示例</button>
+      <button id="btnChassis" title="底盘碰撞箱与伸展尺寸的限值">▦ 底盘 / 尺寸</button>
+      <button id="btnSave" title="把当前模型存成 .json">保存 JSON</button>
+      <button id="btnLoad" title="读取之前存的 .json 模型">读取文件</button>
+      <button id="btnDemo" title="载入当前配置里的示例臂型">示例</button>
+      <button id="btnNew" title="从零搭一条新臂">新建</button>
       <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
     </div>
   </div>
   <div id="views">
     <div class="cell" id="left">
       <canvas id="c3d"></canvas>
-      <div class="cap">任务空间 · 拖拽旋转 / 滚轮缩放 · 原点坐标系 O 常显</div>
-      <div id="chain"></div>
+      <div id="chain" title="链结构：整机原点 O → 各 body 与关节"></div>
       <div class="hint" id="camhint"></div>
     </div>
     <div class="cell" id="right">
-      <div class="head">
-        <span>模型链（点击编辑）</span>
+      <!-- ① 模型链 -->
+      <div class="sect-hd" id="hdList" title="点标题可折叠">
+        <span class="caret">▾</span><span>模型链（点击编辑）</span>
         <button id="btnAdd" class="primary">＋ 建立坐标系</button>
       </div>
-      <div id="list"></div>
-      <div id="cform"></div>
-      <div id="form"></div>
-      <div id="split" title="上下拖动 = 调「模型链 / 可达域」的高度 · 双击复原"></div>
-      <div id="dataPanel">
-        <div class="head">
-          <span>可达域 / 任务域数据</span>
-          <button id="btnAnim" class="primary">▶ 示例装配动画</button>
-        </div>
-        <div id="animMsg" style="padding:5px 12px;font-size:11.5px;background:#0b1020;
-             border-bottom:1px solid var(--line);min-height:18px"></div>
+      <div class="sect-bd" id="bdList">
+        <div id="list"></div>
+        <div id="cform"></div>
+        <div id="form"></div>
+      </div>
+
+      <div id="split" title="上下拖动 = 调两栏高度 · 双击复原"></div>
+
+      <!-- ② 旋转角度 -->
+      <div class="sect-hd" id="hdQ" title="点标题可折叠">
+        <span class="caret">▾</span><span>旋转角度</span>
+        <button id="btnQPanel" class="ghost" title="展开滑条，拖动手动调各关节角">🎛 关节</button>
+      </div>
+      <div class="sect-bd" id="bdQ">
+        <div id="qbody"></div>
+      </div>
+
+      <div id="split2" title="上下拖动 = 调两栏高度 · 双击复原"></div>
+
+      <!-- ③ 可达域 / 任务域 -->
+      <div class="sect-hd" id="hdData" title="点标题可折叠">
+        <span class="caret">▾</span><span>可达域 / 任务域数据</span>
+        <button id="btnAnim" class="primary" title="播放插入装配演示">▶ 示例装配动画</button>
+      </div>
+      <div class="sect-bd" id="bdData">
+        <div id="animMsg"></div>
         <div id="dataBody">载入模型后显示…</div>
       </div>
     </div>
@@ -194,12 +269,26 @@
 <div id="modal">
   <div class="card">
     <h2>机械臂可行性集</h2>
-    <p>只给「杆 + 关节 + 坐标系 + 角度限位」，算出带限位的可达集。<br>
-       全部在本页面内计算，<b>不需要 MATLAB</b>。</p>
+    <p>只给「杆 + 关节 + 坐标系 + 角度限位」，算出带限位的可达集。全部在本页面内计算。</p>
     <div class="btns">
-      <button id="mDemo" class="primary">使用示例</button>
-      <button id="mLoad">读取文件（.json）</button>
-      <button id="mLast">上次的模型</button>
+      <button id="mNew" class="primary">新建</button>
+      <button id="mDemo">示例</button>
+      <button id="mLast">上次</button>
+      <button id="mLoad">读取文件</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 新建向导：单臂/双臂 → base_yaw → 逐段搭 joint+link → 装配位置 → 夹爪插入轴 ===== -->
+<div id="wiz">
+  <div class="card wcard">
+    <div class="wstep" id="wSteps"></div>
+    <div class="wbody" id="wBody"></div>
+    <div class="wfoot">
+      <button id="wCancel">取消</button>
+      <span class="wspacer"></span>
+      <button id="wPrev">上一步</button>
+      <button id="wNext" class="primary">下一步</button>
     </div>
   </div>
 </div>
@@ -214,6 +303,10 @@
 
 <script>
 <!--__MODULE:03-chassis-size__-->
+</script>
+
+<script>
+<!--__MODULE:06-ui__-->
 </script>
 
 <!-- ==================================================================

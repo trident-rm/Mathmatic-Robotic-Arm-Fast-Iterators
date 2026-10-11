@@ -1,4 +1,4 @@
-/*  t11_search.js —— 离线跑连杆搜索（用 armLink.html 里的同一个模块，所以结论和界面里一致）
+/*  t11_search.js —— 离线跑连杆搜索（直接用 web/src/modules/t11_link_mod.js 这个引擎）
     跑法：
       node t11_search.js                # 默认：搜索 3 个随机种子各一轮，再复核
       node t11_search.js --quick        # 只跑一轮小预算（约 30 s）
@@ -8,8 +8,8 @@
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
 const P = require('../lib/paths');
-const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
-const L = sandbox.LINK;
+const { A, LINK } = loadEnv({ variants:false, link:true });
+const L = LINK;
 const ARGV = process.argv.slice(2);
 const QUICK = ARGV.includes('--quick'), BIG = ARGV.includes('--big');
 const dir = __dirname;

@@ -346,54 +346,6 @@ function applyChassisForm(){
   refreshSize(); draw3D(); saveLocal();
 }
 
-/* ==================================================================
-   右栏上下分隔条：拖动改变「模型链 / 可达域」的高度（双击复原）
-   ------------------------------------------------------------------
-   做法是改两栏的 flex **百分比**（不是写死 px）：
-     #list flex: p%   #dataPanel flex: (1−p)%
-   两栏 grow/shrink 都是 1、basis 合计 100%，所以最终高度严格是 p·F 与 (1−p)·F
-   （F = 扣掉两栏表头/表单之后的可用高度）—— 拖动距离和目标高度是 1:1 的，
-   而且窗口一改高度、表单一张开，比例自动跟着走，不用自己算像素。
-   ================================================================== */
-let SPLIT_PCT = null;                       // 当前比例；null = 还没初始化
-const SPLIT_DEF = .38;                      // 默认：模型链 38% / 可达域 62%
-                                            // （CSS 里那份默认比例把模型链压得只剩 ~130px，太挤）
-function setSplitPct(p){
-  p = Math.max(.16, Math.min(.84, p));      // 两边都不许被拖没（也避让两栏的 min-height）
-  document.getElementById('list').style.flex     = '1 1 ' + (p*100).toFixed(2) + '%';
-  document.getElementById('dataPanel').style.flex = '1 1 ' + ((1-p)*100).toFixed(2) + '%';
-  SPLIT_PCT = p;
-}
-function applySplit(){
-  const l = document.getElementById('list'), d = document.getElementById('dataPanel');
-  if(!l || !d) return;
-  setSplitPct(SPLIT_PCT == null ? SPLIT_DEF : SPLIT_PCT);
-}
-(function(){
-  const sp = document.getElementById('split');
-  if(!sp) return;
-  const list = document.getElementById('list'), pan = document.getElementById('dataPanel');
-  let drag = null;
-  sp.addEventListener('mousedown', e => {
-    const a = list.getBoundingClientRect(), b = pan.getBoundingClientRect();
-    drag = {y:e.clientY, h:a.height, tot:a.height + b.height};
-    sp.classList.add('on'); document.body.style.cursor = 'ns-resize';
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', e => {
-    if(!drag) return;
-    setSplitPct((drag.h + (e.clientY - drag.y)) / Math.max(1, drag.tot));
-  });
-  window.addEventListener('mouseup', () => {
-    if(!drag) return;
-    drag = null; sp.classList.remove('on'); document.body.style.cursor = '';
-    saveLocal();
-  });
-  sp.addEventListener('dblclick', () => {    // 双击复原成默认比例
-    SPLIT_PCT = SPLIT_DEF; applySplit(); saveLocal();
-  });
-  applySplit();                              // 进来就按默认比例摆好
-})();
 
 /* ---------------- 控件接线 ---------------- */
 document.getElementById('btnChassis').onclick = () => openChassisForm();
@@ -403,23 +355,14 @@ function syncBoxChecks(){                    // 存档恢复后再回填一次�
     const el = document.getElementById(id);
     if(el) el.checked = SHOWBOX[CB_MAP[id]] !== false;
   }
-  syncFrameBtn();
+  if(typeof syncVisMenu === 'function') syncVisMenu();
 }
-function syncFrameBtn(){                     // 一键按钮的文案跟着两个框的实际状态走
-  const b = document.getElementById('btnFrames'); if(!b) return;
-  const anyOn = (SHOWBOX.chassis !== false) || (SHOWBOX.lwh !== false);
-  b.textContent = anyOn ? '▣ 隐藏框' : '▣ 显示框';
-  b.title = anyOn ? '把【底盘框】和【长宽高框】一起藏起来'
-                  : '把【底盘框】和【长宽高框】一起显示出来';
-}
-document.getElementById('btnFrames').onclick = () => {          // ★ 一键同时开关两个框
-  const on = !((SHOWBOX.chassis !== false) || (SHOWBOX.lwh !== false));
-  SHOWBOX.chassis = SHOWBOX.lwh = on;
-  syncBoxChecks(); draw3D(); saveLocal();
-};
+/* 四个显示开关（坐标架 / 底盘框 / 长宽高框 / 限制球）现在收在顶栏一个下拉里，
+   回填交给 06-ui.js 的 syncVisMenu()。一键按钮 btnFrames 已随改版去掉。 */
 for(const id in CB_MAP){
   document.getElementById(id).onchange = e => {
-    SHOWBOX[CB_MAP[id]] = e.target.checked; syncFrameBtn(); draw3D(); saveLocal();
+    SHOWBOX[CB_MAP[id]] = e.target.checked; draw3D(); saveLocal();
+    if(typeof syncVisMenu === 'function') syncVisMenu();   // 下拉里的勾选状态跟着走
   };
 }
 /* 自检钩子：#size 直接打开底盘/尺寸面板；SIZEINFO() 供无头自检读取全部推导值 */
