@@ -1,0 +1,162 @@
+{
+  "name": "同济工程机械臂（示例）",
+  "base": {
+    "xyz": [
+      0,
+      0,
+      0
+    ],
+    "yaw": -90
+  },
+  "asm": {
+    "x": -500,
+    "y": -200,
+    "z": 0
+  },
+  "links": [
+    {
+      "name": "base_link",
+      "joint": "base_joint",
+      "type": "revolute",
+      "posMode": "origin",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "+Z",
+      "limits": null
+    },
+    {
+      "name": "link1",
+      "joint": "joint1",
+      "type": "revolute",
+      "posMode": "parent",
+      "pos": [
+        0,
+        0,
+        75
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "+X",
+      "limits": [
+        0,
+        122
+      ]
+    },
+    {
+      "name": "link2",
+      "joint": "joint2",
+      "type": "revolute",
+      "posMode": "parent",
+      "pos": [
+        0,
+        290,
+        0
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "-X",
+      "limits": [
+        -90,
+        200
+      ]
+    },
+    {
+      "name": "link3",
+      "joint": "joint3",
+      "type": "revolute",
+      "posMode": "parent",
+      "pos": [
+        85.5,
+        0,
+        0
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "+Z",
+      "limits": null
+    },
+    {
+      "name": "link4",
+      "joint": "joint4",
+      "type": "revolute",
+      "posMode": "parent",
+      "pos": [
+        0,
+        -30,
+        401.47
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "+X",
+      "limits": [
+        -16,
+        220
+      ]
+    },
+    {
+      "name": "link5",
+      "joint": "joint5",
+      "type": "revolute",
+      "posMode": "parent",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "-Z",
+        "z": "+Y"
+      },
+      "axis": "+Z",
+      "limits": null
+    },
+    {
+      "name": "gripper",
+      "joint": "gripper_fix",
+      "type": "fixed",
+      "posMode": "parent",
+      "pos": [
+        0,
+        0,
+        211
+      ],
+      "axes": {
+        "x": "+X",
+        "y": "+Y",
+        "z": "+Z"
+      },
+      "axis": "+Z",
+      "limits": null
+    }
+  ],
+  "vehicle": {
+    "asm": {
+      "x": -500,
+      "y": -200,
+      "z": 800
+    },
+    "insertAxis": "y",
+    "gripAxis": "x"
+  }
+}
