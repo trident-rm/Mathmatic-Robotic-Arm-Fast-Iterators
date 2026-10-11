@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """t9_ik_truth.py —— 用【独立实现】的 FK + scipy 优化器，判定三级任务域位姿到底可不可解
 
 目的：t8/t9 里"强多起点能解 320/320"用的是页面那份 IK。这里换一套完全独立的东西：
@@ -17,6 +17,8 @@ import numpy as np
 from scipy.optimize import least_squares
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# 探针产物统一放 <仓库>/docs/data/（模块化重整后）
+DATA = os.path.normpath(os.path.join(HERE, '..', '..', 'docs', 'data'))
 
 # ---------------------------------------------------------------- 模型（与 armSpec.m / demoModel 一致）
 def Rx(a):
@@ -145,7 +147,7 @@ def check_jac():
 
 # ---------------------------------------------------------------- 1) 与 JS 的 FK 对表
 def check_fk():
-    ref = json.load(open(os.path.join(HERE, 't8_fk_ref.json'), encoding='utf-8'))
+    ref = json.load(open(os.path.join(DATA, 't8_fk_ref.json'), encoding='utf-8'))
     worst_p = worst_R = 0.0
     for case in ref['cases']:
         F = fk(np.array(case['q'], float))
@@ -250,7 +252,7 @@ def main():
     print('   ' + ('✓ 一致' if jw < 1e-4 else '✗ 不一致（残差约定与雅可比不匹配）') + '\n')
 
     import csv
-    rows = list(csv.DictReader(open(os.path.join(HERE, 't8_ik_diag.csv'), encoding='utf-8')))
+    rows = list(csv.DictReader(open(os.path.join(DATA, 't8_ik_diag.csv'), encoding='utf-8')))
     P = [{'x': float(r['x']), 'y': float(r['y']), 'z': float(r['z']),
           'th': float(r['th']), 'ph': float(r['ph']), 'al': float(r['al'])} for r in rows]
 

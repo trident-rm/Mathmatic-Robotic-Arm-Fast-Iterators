@@ -3,6 +3,9 @@ function t7_ik_matlab()
 % 复核 armBuilder.html 里那份自写 IK 的结论（同一批位姿）
 % 读 t7_ik_js.csv（由 t7_ik_node.js 生成），对每个位姿独立求解，比较双方结论。
 d = fileparts(mfilename('fullpath'));
+% 本文件是 function（不是脚本），走不到 addpath 那一套；
+% armSpec / buildChain 现在在 matlab/model，必须自己加载路径
+run(fullfile(d, '..', 'setup.m'));
 T = readtable(fullfile(d,'..','..','docs','data','t7_ik_js.csv'));
 spec = armSpec();
 arm  = buildChain(spec);

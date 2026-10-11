@@ -7,6 +7,7 @@
 */
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
+const P = require('../lib/paths');
 const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
 const L = sandbox.LINK;
 const ARGV = process.argv.slice(2);
@@ -114,6 +115,6 @@ if(best){
     sensitivity: rank.map(r=>({name:r.name, span:+r.span.toFixed(2), best:r.best.val,
                                pts:r.a.map(p=>[+p.val.toFixed(1), +p.score.toFixed(2)])}))
   };
-  fs.writeFileSync(path.join(dir,'t11_best.json'), JSON.stringify(out,null,1), 'utf8');
+  fs.writeFileSync(path.join(P.DATA,'t11_best.json'), JSON.stringify(out,null,1), 'utf8');
   console.log('\n  已写 t11_best.json');
 }else console.log('  搜索没给出候选（旋钮一个都没勾？）');

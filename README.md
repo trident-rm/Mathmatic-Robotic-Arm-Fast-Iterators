@@ -164,13 +164,23 @@ P   = armFeasData(cfg);           % ④ 只要数据、不要界面
 改臂型**只需要改 `matlab/model/armSpec.m` 一个文件**：往 `spec` 里加一项，
 界面自动多出一行控件、HTML 自动多画一段杆和一条关节轴。
 
-> ✅ **已在 MATLAB R2025b Update 4（`matlabroot = D:\`）上实跑验证过**（`matlab -batch`）：
-> - `matlab/setup.m` 生效，`armSpec` / `buildChain` / `chainFK` / `armFeasApp`
->   都从新位置解析到；
-> - `matlab/checks/t2_app_smoke.m` 全部断言通过，含
->   **`chainFK` vs RST `getTransform` 交叉验证：位置误差 2.13e-13 mm、姿态 3.89e-16**；
-> - 界面构造出 19 个控件，5 组控件改动重算均无报错；
-> - 导出确实落在 `build/armFeas.html`（321 KiB），Edge 无头打开可正常渲染。
+> ✅ **`matlab/checks/` 下 10 个自检已在本机全跑一遍**（MATLAB R2025b Update 4 + Python 3.12）：
+>
+> | 自检 | 结果 |
+> |---|---|
+> | `t0_probe_rtb_rst.m` | ✅ RTB / RST 能力探针，含 RTB `islimit` 批量静默错误复现 |
+> | `t0b_debug.m` | ✅ `islimit` 批量错误 + 自建 3 关节臂尺寸 |
+> | `t1_crescent_feas.m` | ✅ 月牙可行集三种做法对比（区间盒只 43.82% 真可行） |
+> | `t1b_debug_gik.m` | ✅ GIK 参数顺序最小复现 |
+> | `t2_app_smoke.m` | ✅ 全部断言通过；`chainFK` vs RST：位置 **2.13e-13 mm**、姿态 **3.89e-16** |
+> | `t3_debug_conv.m` / `t5_debug_rot.m` | ✅ RST 关节约定 / 固定旋转作用顺序 |
+> | `t4_dump_check.m` | ✅ 打印 MATLAB 参考值供浏览器 `#dump` 对表 |
+> | `t7_ik_matlab.m` | ✅ RST `inverseKinematics` 复核自写 IK（320 个三级位姿） |
+> | `t9_ik_truth.py` | ✅ **独立实现**复核（Python FK + scipy 信赖域）：JS FK 偏差 **1.7e-13 mm**；320/320 位置+姿态全解；单起点成功率 ≈ **57.2%** |
+>
+> 顺手修掉两个**与本次重构无关的既有 bug**（都是调试脚本从没跑通过）：
+> `t0b_debug.m` 给 `makeArm` 多传了一个参数（签名是 3 个）；`t7_ik_matlab.m` 是
+> function 文件、拿不到脚本那套 `addpath`，缺 `setup.m` 调用。
 
 ### 4. 无头自检（可选，需要 Node.js + Edge）
 

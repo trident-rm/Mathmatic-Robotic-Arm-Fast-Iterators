@@ -7,6 +7,7 @@
 */
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
+const P = require('../lib/paths');
 const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
 A.buildChain();
 const L = sandbox.LINK;
@@ -62,7 +63,7 @@ console.log('  这份   分数 ' + rC.score.toFixed(1) + '  合格 ' + (100*rC.p
 console.log('  （单套位姿的抽样波动可达 ±3~6 分，下结论要看 t11_verify.js 的多套复核）');
 console.log('  限位未改动 = ' + (rC.limitOK && L.limSig() === L.S.limSig));
 
-const file = path.join(__dirname, tag + '.json');
+const file = path.join(P.DATA, tag + '.json');   // 产物统一放 docs/data/
 fs.writeFileSync(file, JSON.stringify(m, null, 2), 'utf8');
 const back = JSON.parse(fs.readFileSync(file, 'utf8'));
 if(back.name !== m.name || back.links.length !== 7) throw new Error('写出去读回来不一致');

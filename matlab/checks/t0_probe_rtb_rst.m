@@ -158,13 +158,13 @@ try
     axis equal; grid on; title('设计A 大臂290mm'); xlabel x; ylabel y; zlabel z;
     subplot(1,2,2); scatter3(WB(:,1),WB(:,2),WB(:,3),3,vecnorm(WB,2,2),'filled');
     axis equal; grid on; title('设计B 大臂320mm'); xlabel x; ylabel y; zlabel z;
-    exportgraphics(f, fullfile(here,'t0_ws_designAB.png'), 'Resolution', 120);
+    exportgraphics(f, fullfile(here,'..','..','docs','screenshots','t0_ws_designAB.png'), 'Resolution', 120);
     fprintf('\n已保存 t0_ws_designAB.png\n');
 catch ME
     fprintf('[绘图跳过] %s\n', ME.message);
 end
-writematrix(WA, fullfile(here,'t0_ws_A.csv'));
-writematrix(WB, fullfile(here,'t0_ws_B.csv'));
+writematrix(WA, fullfile(here,'..','..','docs','data','t0_ws_A.csv'));
+writematrix(WB, fullfile(here,'..','..','docs','data','t0_ws_B.csv'));
 fprintf('已保存 t0_ws_A.csv / t0_ws_B.csv\n');
 
 %% ---------- 机器可读摘要（UTF-8，绕过控制台编码问题） ----------

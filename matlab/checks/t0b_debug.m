@@ -13,7 +13,9 @@ fprintf('批量 2x6       -> size %s, 值 %s  <-- 静默错误\n', mat2str(size(
 fprintf('直接比 qlim    -> %s (正解)\n', mat2str((q2 > p560.qlim(:,2).') - (q2 < p560.qlim(:,1).')));
 
 fprintf('\n--- 自建 3 关节臂的尺寸 ---\n');
-a = makeArm([0 0.290 0.402 0.176], [0 0 1; 0 1 0; 0 1 0], [-150 150; -5 145; -150 150], 'A');
+% 注：makeArm 的签名是 makeArm(offs, axes_, limDeg) —— 三个参数。
+%     这里原本多传了一个 'A'（早期版本 makeArm 带设计名），会报"输入参数太多"。
+a = makeArm([0 0.290 0.402 0.176], [0 0 1; 0 1 0; 0 1 0], [-150 150; -5 145; -150 150]);
 ss = manipulatorStateSpace(a);
 fprintf('StateBounds size = %s\n', mat2str(size(ss.StateBounds)));
 [W, C] = generateRobotWorkspace(a, {}, 'MaxNumSamples', 100, 'IgnoreSelfCollision', 'off');

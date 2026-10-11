@@ -12,6 +12,8 @@ docs/data/t0_ws_A.csv
 docs/data/t0_ws_B.csv
 # 逐个位姿 IK 诊断明细（由 web/checks/t8_ik_diag.js 写出）
 docs/data/t8_ik_diag.csv
+# t7 的 JS/MATLAB 对照明细（由 matlab/checks/t7_ik_matlab.m 写出）
+docs/data/t7_ik_compare.csv
 
 # ---- 无头自检每次重新生成的临时副本 ----
 web/checks/t10_ui_probe.html

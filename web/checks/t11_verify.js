@@ -1,4 +1,4 @@
-﻿/*  t11_verify.js —— 把候选连杆放到【多套独立位姿集】上复核（防止只在搜索用的那套位姿上好看）
+/*  t11_verify.js —— 把候选连杆放到【多套独立位姿集】上复核（防止只在搜索用的那套位姿上好看）
     跑法： node t11_verify.js            （约 1~2 min）
     读：   t11_best.json（t11_search.js 的产物）；没有就只用内置的候选
     打印：每个候选 × 3 套位姿（不同随机种子）的 分数 / 合格率 / 裕度 / 姿态 / 未解出 / 杆长和 /
@@ -6,6 +6,7 @@
 */
 const fs = require('fs'), path = require('path');
 const { loadEnv } = require('./t9_load.js');
+const P = require('../lib/paths');
 const { A, sandbox } = loadEnv({ variants:false, file:'armLink.html' });
 const L = sandbox.LINK;
 const dir = __dirname;
@@ -91,7 +92,7 @@ console.log('\n各段杆长：');
 rows.forEach(r=>console.log('  ' + r.tag.padEnd(32) + r.segs.map(v=>v.toFixed(0).padStart(5)).join('')));
 console.log('  ' + '基准'.padEnd(32) + (function(){ const keep=L.readModel();
   L.writeVals(BASE); const g=L.segLens(); L.writeVals(keep); return g.map(v=>v.toFixed(0).padStart(5)).join(''); })());
-fs.writeFileSync(path.join(dir,'t11_verify.json'), JSON.stringify(
+fs.writeFileSync(path.join(P.DATA,'t11_verify.json'), JSON.stringify(
   rows.map(r=>({tag:r.tag, score:+r.score.toFixed(2), pass:+(100*r.pass).toFixed(1),
                 margMed:+r.marg.toFixed(2), angMed:+r.ang.toFixed(2), found:+(100*r.found).toFixed(1),
                 armLen:+r.armLen.toFixed(1), reach:+(r.reach||0).toFixed(0),

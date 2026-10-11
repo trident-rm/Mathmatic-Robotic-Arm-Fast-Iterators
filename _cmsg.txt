@@ -1,0 +1,38 @@
+自检全跑：MATLAB 10 个 + 浏览器 203 项断言；修 3 处漏改路径 / 2 个既有 bug
+
+一、全量跑了一遍自检（MATLAB R2025b Update 4 + Python 3.12）
+  浏览器侧 203 项断言全过：
+    t10_chassis_size 39 · t11_link_tune 60 · t10_ui_probe 50 · t11_ui_probe 54
+  构建仍与重构前逐字节相同：armBuilder 5077ab35c6fd / armLink bd7bea45bba5
+  MATLAB 侧 10 个自检全部跑通（结果见 README）。
+
+二、修 3 处上一轮漏改的输出路径（都写回了源码目录，属于模块化没做完）
+  · t0_probe_rtb_rst.m：t0_ws_designAB.png 与 t0_ws_A/B.csv 仍写 matlab/checks/
+    （上一轮的 sed 只匹配了一种间距写法，漏了这两行）
+  · t9_ik_truth.py：读 t8_fk_ref.json / t8_ik_diag.csv 还在找同目录，
+    这两个文件已移到 docs/data/，改为经 DATA 变量解析
+  · t11_search.js / t11_verify.js / t11_make_rec.js：产物仍写 web/checks/
+    （t11_best.json、t11_verify.json、示例臂_推荐连杆*.json），改用 lib/paths.js 的 P.DATA
+
+三、修 2 个与本次重构无关的既有 bug（这两个调试脚本从没跑通过）
+  · t0b_debug.m：makeArm 的签名是 3 个参数，调用却传了 4 个（多了个 'A'，早期 API 残留）
+  · t7_ik_matlab.m：它是 function 文件，拿不到脚本那套 addpath，缺 setup.m 调用，
+    报 "函数或变量 'armSpec' 无法识别"
+
+四、新增：10 个 MATLAB 自检的实测结果写进 README
+  其中最硬的两条独立验证：
+    · t2_app_smoke：chainFK vs RST getTransform，位置 2.13e-13 mm、姿态 3.89e-16
+    · t9_ik_truth.py：Python 独立 FK vs JS FK 偏差 1.7e-13 mm；
+      独立 scipy 信赖域求解器 320/320 = 100% 位置+姿态全解，单起点成功率 57.2%
+
+五、t7 交叉验证结果存疑，未修（另行报告，不在本次改动范围）
+  t7 报 "RST inverseKinematics 可解 0/200 = 0.0%"，而 t9 的独立求解器说 100%。
+  200 个位姿的 RST 位置误差全部落在 364~594mm（中位 482mm），是【系统性】偏差，
+  不是求解器失败。原因：JS 的 MODEL.base.yaw = -90（rotZdeg），
+  而 MATLAB 的 buildChain/armSpec 里没有 base 安装旋转，
+  两边正解基准系差一个绕 Z 的 -90° 旋转，t7 手写的 taskToBase 映射盖不住。
+  已记入 TODO，未改代码 —— 校正一个"验证脚本"必须先把基准系对齐讲清楚。
+
+六、其他
+  · .gitignore 加 docs/data/t7_ik_compare.csv
+  · docs/ 下的探针产物按本次实跑重新生成

@@ -1,4 +1,4 @@
-t0_probe_rtb_rst 摘要  2026-09-18 19:17:26
+t0_probe_rtb_rst 摘要  2026-10-11 15:29:05
 MATLAB 25.2.0.3150157 (R2025b) Update 4 (2025b), matlabroot=D:\
 
 [1] RTB 10.4
@@ -8,11 +8,11 @@ MATLAB 25.2.0.3150157 (R2025b) Update 4 (2025b), matlabroot=D:\
 
 [2] RST generateRobotWorkspace (puma560)
   N=1e4/1e5 均 <0.5 s；限位内 100%；自碰撞开启后 1e4 点约 1.0 s
-  IK(EnforceJointLimits) 200 个可达位姿: 成功 192 (96.0%), 31 ms/次
+  IK(EnforceJointLimits) 200 个可达位姿: 成功 192 (96.0%), 42 ms/次
 
 [3] 代码建树迭代臂型
-  A_大臂290: npts=50000 voxel=8219 r=59~868mm t=0.220s inlimit=50000/50000
-  B_大臂320: npts=50000 voxel=8559 r=56~898mm t=0.229s inlimit=50000/50000
+  A_大臂290: npts=50000 voxel=8219 r=59~868mm t=0.331s inlimit=50000/50000
+  B_大臂320: npts=50000 voxel=8559 r=56~898mm t=0.335s inlimit=50000/50000
   任务域顺序: 近身低位, 前方中距, 高位前伸
   覆盖率% A = [0.358 0.408 1.118]
   覆盖率% B = [0.3 0.384 1.002]
