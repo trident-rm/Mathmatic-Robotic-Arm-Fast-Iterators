@@ -1,0 +1,439 @@
+{
+  "exportedAt": "2026-10-11T20:53:07.477Z",
+  "configId": "xigongda",
+  "keys": {
+    "armBuilderCfg:tongji": {
+      "init": {
+        "x": -500,
+        "y": -200,
+        "z": 800,
+        "th": 0,
+        "ph": 90,
+        "al": 0
+      },
+      "taskMap": "swap",
+      "baseH": 170,
+      "nSample": "100000",
+      "yaw": -90,
+      "q": [
+        61.552281921586285,
+        84.68641784751648,
+        124.96410441515106,
+        108.0013963978869,
+        158.0921386792495,
+        39.34807247184493
+      ],
+      "chassis": {
+        "posMode": "base",
+        "pos": [
+          0,
+          140,
+          0
+        ],
+        "size": [
+          580,
+          580,
+          105
+        ],
+        "zDir": -1
+      },
+      "chassisV": 2,
+      "sizer": {
+        "lwh": [
+          1200,
+          1200,
+          1100
+        ],
+        "ballD": 1500,
+        "ballH": 480
+      },
+      "configId": "tongji",
+      "modelCfg": "{\"asm\":{\"x\":-500,\"y\":-200,\"z\":0},\"base\":{\"xyz\":[0,0,0],\"yaw\":-90},\"links\":[{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"base_joint\",\"limits\":null,\"name\":\"base_link\",\"pos\":[0,0,0],\"posMode\":\"origin\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+X\",\"joint\":\"joint1\",\"limits\":[0,122],\"name\":\"link1\",\"pos\":[0,0,75],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"-X\",\"joint\":\"joint2\",\"limits\":[-90,200],\"name\":\"link2\",\"pos\":[0,290,0],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"joint3\",\"limits\":null,\"name\":\"link3\",\"pos\":[85.5,0,0],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+X\",\"joint\":\"joint4\",\"limits\":[-16,220],\"name\":\"link4\",\"pos\":[0,-30,401.47],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"-Z\",\"z\":\"+Y\"},\"axis\":\"+Z\",\"joint\":\"joint5\",\"limits\":null,\"name\":\"link5\",\"pos\":[0,0,0],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"gripper_fix\",\"limits\":null,\"name\":\"gripper\",\"pos\":[0,0,211],\"posMode\":\"parent\",\"type\":\"fixed\"}],\"name\":\"同济工程机械臂（示例）\"}",
+      "t": 1791751659653
+    },
+    "armBuilderCfg:xigongda": {
+      "init": {
+        "x": -500,
+        "y": -200,
+        "z": 800,
+        "th": 0,
+        "ph": 90,
+        "al": 0
+      },
+      "taskMap": "swap",
+      "baseH": 170,
+      "nSample": "100000",
+      "yaw": -90,
+      "q": [
+        0,
+        0,
+        74,
+        -128.27664185516252,
+        18.841297620480404,
+        -6.17403296319306
+      ],
+      "chassis": {
+        "posMode": "base",
+        "pos": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          580,
+          580,
+          105
+        ],
+        "zDir": -1
+      },
+      "chassisV": 2,
+      "sizer": {
+        "lwh": [
+          1200,
+          1200,
+          1100
+        ],
+        "ballD": 1500,
+        "ballH": 480
+      },
+      "configId": "xigongda",
+      "modelCfg": "{\"asm\":{\"x\":-500,\"y\":-200,\"z\":0},\"base\":{\"xyz\":[0,0,0],\"yaw\":-90},\"links\":[{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"base_joint\",\"limits\":null,\"name\":\"base_link\",\"pos\":[0,0,0],\"posMode\":\"origin\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+X\",\"joint\":\"joint1\",\"limits\":[0,150],\"name\":\"link1\",\"pos\":[0,0,95],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"-X\",\"joint\":\"joint2\",\"limits\":[-81,270],\"name\":\"link2\",\"pos\":[0,478.84,33.39],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"joint3\",\"limits\":null,\"name\":\"link3\",\"pos\":[21.71,36.96,164],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+X\",\"joint\":\"joint4\",\"limits\":[-70,250],\"name\":\"link4\",\"pos\":[0,0,268],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"-Z\",\"z\":\"+Y\"},\"axis\":\"+Z\",\"joint\":\"joint5\",\"limits\":null,\"name\":\"link5\",\"pos\":[0,0,0],\"posMode\":\"parent\",\"type\":\"revolute\"},{\"axes\":{\"x\":\"+X\",\"y\":\"+Y\",\"z\":\"+Z\"},\"axis\":\"+Z\",\"joint\":\"gripper_fix\",\"limits\":null,\"name\":\"gripper\",\"pos\":[0,0,89.14],\"posMode\":\"parent\",\"type\":\"fixed\"}],\"name\":\"西工大机械臂\"}",
+      "t": 1791751953546
+    },
+    "armBuilderModel:xigongda": {
+      "name": "西工大机械臂",
+      "base": {
+        "xyz": [
+          0,
+          0,
+          0
+        ],
+        "yaw": -90
+      },
+      "links": [
+        {
+          "name": "base_link",
+          "joint": "base_joint",
+          "type": "revolute",
+          "posMode": "origin",
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "link1",
+          "joint": "joint1",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            95
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+X",
+          "limits": [
+            0,
+            150
+          ]
+        },
+        {
+          "name": "link2",
+          "joint": "joint2",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            478.84,
+            33.39
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "-X",
+          "limits": [
+            -81,
+            270
+          ]
+        },
+        {
+          "name": "link3",
+          "joint": "joint3",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            21.71,
+            36.96,
+            164
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "link4",
+          "joint": "joint4",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            268
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+X",
+          "limits": [
+            -70,
+            250
+          ]
+        },
+        {
+          "name": "link5",
+          "joint": "joint5",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "-Z",
+            "z": "+Y"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "gripper",
+          "joint": "gripper_fix",
+          "type": "fixed",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            89.14
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        }
+      ],
+      "vehicle": {
+        "asm": {
+          "x": -500,
+          "y": -200,
+          "z": 800
+        },
+        "insertAxis": "y",
+        "gripAxis": "x"
+      }
+    },
+    "armBuilderModel:tongji": {
+      "name": "同济工程机械臂（示例）",
+      "base": {
+        "xyz": [
+          0,
+          0,
+          0
+        ],
+        "yaw": -90
+      },
+      "asm": {
+        "x": -500,
+        "y": -200,
+        "z": 0
+      },
+      "links": [
+        {
+          "name": "base_link",
+          "joint": "base_joint",
+          "type": "revolute",
+          "posMode": "origin",
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "link1",
+          "joint": "joint1",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            75
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+X",
+          "limits": [
+            0,
+            122
+          ]
+        },
+        {
+          "name": "link2",
+          "joint": "joint2",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            290,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "-X",
+          "limits": [
+            -90,
+            200
+          ]
+        },
+        {
+          "name": "link3",
+          "joint": "joint3",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            85.5,
+            0,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "link4",
+          "joint": "joint4",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            -30,
+            401.47
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+X",
+          "limits": [
+            -16,
+            220
+          ]
+        },
+        {
+          "name": "link5",
+          "joint": "joint5",
+          "type": "revolute",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            0
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "-Z",
+            "z": "+Y"
+          },
+          "axis": "+Z",
+          "limits": null
+        },
+        {
+          "name": "gripper",
+          "joint": "gripper_fix",
+          "type": "fixed",
+          "posMode": "parent",
+          "pos": [
+            0,
+            0,
+            211
+          ],
+          "axes": {
+            "x": "+X",
+            "y": "+Y",
+            "z": "+Z"
+          },
+          "axis": "+Z",
+          "limits": null
+        }
+      ],
+      "vehicle": {
+        "asm": {
+          "x": -500,
+          "y": -200,
+          "z": 800
+        },
+        "insertAxis": "y",
+        "gripAxis": "x"
+      }
+    },
+    "armBuilderView": {
+      "splitPct": 0.5,
+      "showbox": {
+        "chassis": true,
+        "lwh": true,
+        "ball": true
+      },
+      "configId": "xigongda",
+      "t": 1791751953546
+    },
+    "armBuilderSect": {
+      "List": false,
+      "Q": true,
+      "Veh": false,
+      "Data": false
+    }
+  }
+}
