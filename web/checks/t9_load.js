@@ -70,6 +70,12 @@ globalThis.__api = {
   applyConfig, listConfigs, activeConfigId, configModel, initDefaultConfig,
   /* ★ 多臂（t13 起）*/
   armCount, armOfJointQI, armModel, armEnd, sampleReach,
+  /* ★ 界面骨架与新建向导（t14 起）。它们是 let/const，不挂 globalThis，
+     必须在这里显式导出，否则自检拿不到。 */
+  get WIZ(){return WIZ}, get WIZ_STEPS(){return WIZ_STEPS},
+  wizReset, wizEnsureArms, wizBuildArm, wizValidate,
+  wizOpen, wizClose, wizNext, wizPrev, wizFinish, initWizard,
+  renderAngles, setSectOpen, syncVisMenu,
   get ARMS(){return ARMS}, get ARMSTATS(){return ARMSTATS},
   fkAllArm, fkAllArms,
   get CONFIG(){return CONFIG},

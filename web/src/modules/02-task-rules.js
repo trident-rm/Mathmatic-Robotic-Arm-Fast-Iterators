@@ -171,6 +171,18 @@ function bestOfSeeds(Eb, eB, q0, nSeed){
 function analyzeTask(){
   const el = document.getElementById('dataBody');
   if(!MODEL){ el.textContent='载入模型后显示…'; return; }
+  /* ★ 没有竞赛规则 / 没有 map 的配置（向导新建出来的就是这种）要在这里让开。
+     以前这里直接读 RULES.levels[3]，配置层允许 rules:null 之后就会抛
+     "Cannot read properties of undefined" —— 而且是在 updateAll 里抛的，
+     整个界面会停在半截。 */
+  if(!RULES || !RULES.levels || !RULES.levels[3] || !MAP){
+    el.innerHTML = '<div class="sect">任务域校核</div>' +
+      '<div class="one" style="color:#5d6b88;line-height:1.8">' +
+      '当前构型没有绑定竞赛规则，所以这里只显示通用几何量。<br>' +
+      '『可达域』部分照常可用；任务域（三级位姿范围）需要一个 <b>rules</b> 配置。' +
+      '</div>';
+    return;
+  }
   if(!VOX || !VOX.size){ el.textContent='可达集为空'; return; }
   const L = RULES.levels[3], vs = 50, N = 6000;
   let hit=0, hit0=0; const zb=new Map(); const miss=[];
