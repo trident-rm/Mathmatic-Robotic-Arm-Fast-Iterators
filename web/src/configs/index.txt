@@ -4,3 +4,4 @@
 # 想加一个新构型：在这里加一行，再放一个同名的 .js（见 tongji.js 的写法）。
 tongji
 demo3dof
+dual_demo

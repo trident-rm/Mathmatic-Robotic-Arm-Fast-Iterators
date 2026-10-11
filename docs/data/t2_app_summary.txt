@@ -1,5 +1,5 @@
-t2_app_smoke 摘要  2026-10-11 17:51:22
+t2_app_smoke 摘要  2026-10-11 18:06:58
 1 当前链: base_link->link1->link2->link3->link4->link5->gripper | 关节数 6 | 末端 gripper @ [471 -85.5 476.47] mm
-2 合成链回归: 关节 4, 月牙内 5.32%, 体素 2140->302, 半径 283~583 mm, 0.132 s
+2 合成链回归: 关节 4, 月牙内 5.32%, 体素 2140->302, 半径 283~583 mm, 0.129 s
 3 界面构造 true；导出 E:\robomaster\26-27年\同济工程研究\Matlab测试\matlab\core\..\..\build\armFeas.html
 4 渲染验证：Edge --headless --screenshot 核对 t2_html_render_check.png

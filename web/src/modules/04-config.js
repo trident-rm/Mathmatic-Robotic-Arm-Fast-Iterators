@@ -93,13 +93,12 @@ function applyConfig(id) {
   CONFIG = cfg;
   APPLIED_CONFIG_ID = id;
 
-  /* 1) 臂型 → MODEL（引擎只从这里拿模型，不再自带示例臂） */
-  if (cfg.model) {
-    MODEL = JSON.parse(JSON.stringify(cfg.model));
-  }
-  /* 安装朝向以 rules.frame.yaw 为准（两者本来就该是同一个量，写两处容易走偏） */
-  if (MODEL && cfg.rules && cfg.rules.frame && typeof cfg.rules.frame.yaw === 'number') {
-    MODEL.base.yaw = cfg.rules.frame.yaw;
+  /* 1) 臂型 → MODEL（引擎只从这里拿模型，不再自带示例臂）
+       支持单臂 model 与多臂 arms 两种写法，统一归一化。 */
+  const armList = normalizeArms(cfg);
+  cfg.__arms = armList;                       // 引擎的 buildChain 读它
+  if (armList.length) {
+    MODEL = armList[0];                       // 第 0 条臂 = MODEL（老语义）
   }
   if (MODEL) buildChain();
 
@@ -178,6 +177,52 @@ function configModel(id) {
   const cfg = CONFIGS[id || DEFAULT_CONFIG_ID];
   if (!cfg || !cfg.model) return null;
   return JSON.parse(JSON.stringify(cfg.model));
+}
+
+/* ---------------- 多臂归一化 ----------------
+   配置里两种写法都收，内部统一成"一个臂数组"：
+
+     单臂（老写法，推荐继续用）：
+         model: { name, base:{xyz,yaw}, links:[...] }
+
+     多臂：
+         arms: [ {name, base:{xyz,yaw}, links:[...]}, {...} ]
+         （写了 arms 就不用写 model；两个都写时以 arms 为准）
+
+   归一化之后：
+     · ARMS[a]  = 第 a 条臂的模型（含 name/base/links）
+     · MODEL    = ARMS[0] 的别名 ⇒ 所有老代码/老自检照旧
+     · 各臂的 base.yaw 若没写，回落到 rules.frame.yaw（与单臂一致的行为）
+
+   为什么要支持多臂：双臂机器人两条臂的安装位置与朝向都不同，
+   但关节角是同一时刻的一组向量，"协同"就是同一组 q 下两条臂同时到某处。 */
+function normalizeArms(cfg) {
+  let list = [];
+  if (Array.isArray(cfg.arms) && cfg.arms.length) {
+    list = cfg.arms.map(a => JSON.parse(JSON.stringify(a)));
+  } else if (cfg.model) {
+    list = [JSON.parse(JSON.stringify(cfg.model))];
+  }
+  const fy = (cfg.rules && cfg.rules.frame && typeof cfg.rules.frame.yaw === 'number')
+    ? cfg.rules.frame.yaw : 0;
+  list.forEach((m, i) => {
+    if (!m.base) m.base = { xyz: [0, 0, 0], yaw: fy };
+    if (!Array.isArray(m.base.xyz)) m.base.xyz = [0, 0, 0];
+    /* 只有【单臂】才把安装朝向统一成 frame.yaw（老行为，不能变）；
+       多臂时每条臂的 yaw 是自己的，帧里的 yaw 只描述"任务系怎么摆"。 */
+    if (list.length === 1 && typeof cfg.rules !== 'undefined' && cfg.rules &&
+        cfg.rules.frame && typeof cfg.rules.frame.yaw === 'number') {
+      m.base.yaw = cfg.rules.frame.yaw;
+    }
+    if (!m.name) m.name = '臂' + i;
+    if (!Array.isArray(m.links)) m.links = [];
+  });
+  return list;
+}
+
+/* 当前生效的所有臂（引擎的 buildChain 会调它） */
+function activeArms() {
+  return (CONFIG && CONFIG.__arms) ? CONFIG.__arms : null;
 }
 
 /* ---------------- 启动时把默认配置装上 ----------------

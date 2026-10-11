@@ -61,8 +61,10 @@ function mulberry32(a) {
 /* 在给定模型上跑一遍全链路，返回统计量 */
 function exercise(model, label, seed) {
   const R = { label };
-  A.MODEL = model;
-  A.buildChain();
+  /* ★ 显式把模型交给 buildChain（多臂改造后 buildChain 支持传参）。
+     直接写 A.MODEL = model 再空参调 buildChain 是不行的 ——
+     空参会回落到"当前配置的臂列表"，手上这份就被忽略了。 */
+  A.buildChain(model);
   R.nJ = A.NJ;
   R.limits = A.qLimits();
   R.nLim = R.limits.length;

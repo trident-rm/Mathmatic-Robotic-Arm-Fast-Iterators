@@ -48,6 +48,7 @@ function demoModel(){
 /* ---------------- 由 MODEL 生成可计算的链 ---------------- */
 let MODEL = null, CHAIN = [], NJ = 0, Q = [], ACTIVE = -1, SHOW_FRAMES = true;
 let CLOUD = [], STATS = {}, CURVEPTS = null;
+let ARMSTATS = [];              // 每条臂的可达集与统计（多臂用）
 
 /* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态 ----------------
    ★ 默认值来自配置（CONFIG.chassis），引擎不再自带同济的车体尺寸。
@@ -59,10 +60,33 @@ let SIZER   = { lwh:[0,0,0], ballD:0, ballH:0 };
 let SHOWBOX = { chassis:true, lwh:true, ball:true };
 let PANEL_REST = '';            // 数据面板里除"底盘/尺寸"段以外的 HTML（改底盘参数时只重画尺寸段）
 
-function buildChain(){
-  CHAIN = []; NJ = 0;
-  let R = rotZdeg(MODEL.base.yaw), t = MODEL.base.xyz.slice();   // 父系 = 整机原点系
-  MODEL.links.forEach((L, i) => {
+/* ---------------- 多臂支持 ----------------
+   一个构型可以有 N 条臂（N=1 就是原来那条）。
+   约定：
+     · MODEL / CHAIN / NJ / Q 仍然指向【第 0 条臂】，老代码全部照旧能用
+     · CHAIN 是【所有臂首尾相接】的扁平数组，Q 也是扁平的
+       ⇒ qLimits() / ikSolve6() 这些"按关节序号"的函数天然支持多臂，
+         第 a 条臂的关节就是 [arm.j0, arm.j0+arm.nJ)
+     · ARMS[a] 记录每条臂的元信息与它在扁平数组里的区间
+   ------------------------------------------------------------------ */
+let ARMS = [];                  // 每条臂：{name, model, yaw, c0, cN, j0, nJ, ee, xyz}
+function armCount(){ return ARMS.length || 1; }
+function armOfJointQI(qi){       // 扁平关节序号 -> 臂序号（-1 = 找不到）
+  for(let a=0;a<ARMS.length;a++){
+    const A = ARMS[a];
+    if(qi >= A.j0 && qi < A.j0 + A.nJ) return a;
+  }
+  return -1;
+}
+/* 取某条臂的模型（不传就用第 0 条） */
+function armModel(a){ a = a || 0; return (ARMS[a] && ARMS[a].model) || MODEL; }
+
+/* 把一条臂的 link 追加进 CHAIN */
+function appendArm(a, arm, R0, t0, out){
+  let R = R0.slice(), t = t0.slice();
+  let nj = 0;
+  const c0 = out.length;
+  arm.links.forEach((L, i) => {
     let off;
     if(L.posMode === 'origin' && i > 0){
       // 在整机原点系里给的绝对位置 → 换算成相对父系的偏移
@@ -72,13 +96,47 @@ function buildChain(){
     }
     const Rf = frameRot(L.axes);
     const movable = L.type !== 'fixed';
-    CHAIN.push({name:L.name, joint:L.joint, type:L.type, movable, offset:off, Rf,
-                axis:axisVec(L.axis), axLabel:L.axis,
-                limits:L.limits ? L.limits.slice() : null});
-    if(movable) NJ++;
+    out.push({name:L.name, joint:L.joint, type:L.type, movable, offset:off, Rf,
+              axis:axisVec(L.axis), axLabel:L.axis, arm:a,
+              limits:L.limits ? L.limits.slice() : null});
+    if(movable) nj++;
     t = addv(mulv(R, off), t);
     R = mul3(R, Rf);
   });
+  return {c0, cN: out.length, nJ: nj};
+}
+
+function buildChain(modelOrList){
+  /* 参数三种写法：
+       buildChain()            用【当前配置】的臂列表（界面走这条）
+       buildChain(model)       用这一条臂（无头自检、临时试算走这条）
+       buildChain([m0, m1, …]) 用这组臂（多臂）
+     ★ 引擎函数不该偷偷去读全局配置：不传参数时才回落到配置，
+       这样"给我一条臂，把链建出来"是显式可测的，不会出现
+       "我设了 MODEL 却没生效"这种隐蔽耦合（t12 就是被这个坑挂掉的）。 */
+  let list;
+  if(Array.isArray(modelOrList)){
+    list = modelOrList;
+  } else if(modelOrList && Array.isArray(modelOrList.links)){
+    list = [modelOrList];
+  } else {
+    const arms = (typeof activeArms === 'function') ? activeArms() : null;
+    list = (arms && arms.length) ? arms : (MODEL ? [MODEL] : []);
+  }
+  const flat = [];
+  ARMS = [];
+  let j0 = 0;
+  list.forEach((arm, a) => {
+    const R0 = rotZdeg(arm.base.yaw), t0 = arm.base.xyz.slice();
+    const m = appendArm(a, arm, R0, t0, flat);
+    ARMS.push({name: arm.name, model: arm, yaw: arm.base.yaw, xyz: arm.base.xyz.slice(),
+               c0: m.c0, cN: m.cN, j0: j0, nJ: m.nJ, ee: m.cN - 1});
+    j0 += m.nJ;
+  });
+  CHAIN = flat;
+  NJ = j0;
+  /* 第 0 条臂继续用原来的名字，老代码（与自检）不受影响 */
+  if(list.length) MODEL = list[0];
   syncQ();
 }
 function frameRot(ax){
@@ -104,32 +162,75 @@ function syncQ(){                       // 关节数变化就重置，否则保�
   else { Q = Q.map((v,i) => Math.min(Math.max(v, lim[i][0]), lim[i][1])); }
 }
 
-/* ---------------- 正解 ---------------- */
-function fkAll(q){
-  let R = rotZdeg(MODEL.base.yaw), t = MODEL.base.xyz.slice();
-  const out = [{name:'O(整机原点)', joint:'', R:R, t:t, axis:[0,0,0], movable:false, qi:-1}];
-  let qi = 0;
-  for(const c of CHAIN){
+/* ---------------- 正解 ----------------
+   fkAllArm(q, a) 算【第 a 条臂】：返回该臂的坐标系序列，第 0 个是整机原点 O。
+   fkAll(q)       保持老语义 = 第 0 条臂（所有老代码与自检不受影响）。
+   fkAllArms(q)   所有臂拼起来，每项多一个 arm 字段（用于多臂取样与显示）。
+   q 是【扁平】关节角数组，第 a 条臂用 q[j0 .. j0+nJ)。                    */
+function fkAllArm(q, a){
+  a = a || 0;
+  const A = ARMS[a];
+  if(!A) throw new Error('没有第 ' + a + ' 条臂');
+  const arm = A.model;
+  let R = rotZdeg(arm.base.yaw), t = arm.base.xyz.slice();
+  const out = [{name:'O(整机原点)', joint:'', R:R, t:t, axis:[0,0,0],
+                movable:false, qi:-1, arm:a}];
+  let qi = A.j0;
+  for(let ci = A.c0; ci < A.cN; ci++){
+    const c = CHAIN[ci];
     let Rj = I3;
     if(c.movable){ Rj = rotAxis(c.axis, (q[qi]||0)*D2R); qi++; }
     const tNew = addv(mulv(R, c.offset), t);   // 用【更新前】的 R
     R = mul3(mul3(R, c.Rf), Rj);
     t = tNew;
-    out.push({name:c.name, joint:c.joint, R:R, t:t, axis:c.axis, movable:c.movable, qi:qi-1});
+    out.push({name:c.name, joint:c.joint, R:R, t:t, axis:c.axis, movable:c.movable,
+              qi:qi-1, arm:a});
   }
   return out;
 }
+function fkAll(q){ return fkAllArm(q, 0); }
 
-/* ---------------- 采样 + 体素化（全部在浏览器里算） ---------------- */
-function computeFeasible(){
-  const N = parseInt(document.getElementById('selN').value, 10) || 30000;
+/* 所有臂的正解拼接（第 0 条臂的 O 只留一份，避免整机原点重复出现） */
+function fkAllArms(q){
+  const out = [];
+  for(let a=0;a<armCount();a++){
+    const F = fkAllArm(q, a);
+    if(a === 0) out.push(...F);
+    else        out.push(...F.slice(1));
+  }
+  return out;
+}
+/* 某条臂的末端位姿（不传 a 就是第 0 条） */
+function armEnd(q, a){
+  const A = ARMS[a || 0];
+  if(!A) return null;
+  const F = fkAllArm(q, a || 0);
+  return F[F.length - 1];
+}
+
+/* ---------------- 采样 + 体素化（全部在浏览器里算） ----------------
+   sampleReach(N) 是【纯计算】：不碰 DOM、不读界面，只把结果算出来返回。
+   computeFeasible() 只负责"从界面读采样数 -> 调它 -> 写回全局"。
+   这样无头自检（Node 沙箱）可以直接调 sampleReach 验证多臂统计，
+   不必依赖界面控件。                                                */
+function sampleReach(N){
+  N = N || 30000;
   const lim = qLimits();
   const q = new Array(NJ);
-  const pts = new Array(N);
+  const nA = armCount();
+  const pts = new Array(N);          // 主点云：第 0 条臂（老语义不变）
+  const ptsArm = [];                 // 多臂：每条臂一条点云
+  for(let a=0;a<nA;a++) ptsArm.push([]);
   for(let s=0;s<N;s++){
     for(let i=0;i<NJ;i++){ const [lo,hi]=lim[i]; q[i] = lo + Math.random()*(hi-lo); }
-    const F = fkAll(q);
-    pts[s] = F[F.length-1].t.slice();
+    /* 一次采样把所有臂的末端都取出来 —— 同一组 q，各臂各自算，
+       所以"协同"是天然成立的（两条臂共用同一时刻的关节角向量）。
+       臂间碰撞/干涉不在本工具范围内（见 README 已知边界）。 */
+    for(let a=0;a<nA;a++){
+      const p = armEnd(q, a).t.slice();
+      ptsArm[a].push(p);
+      if(a === 0) pts[s] = p;
+    }
   }
   const vs = 50, keys = new Set();
   let rmin = Infinity, rmax = 0, zmin = Infinity, zmax = -Infinity, rhomin = Infinity, rhomax = 0;
@@ -140,9 +241,31 @@ function computeFeasible(){
     if(p[2]<zmin) zmin=p[2]; if(p[2]>zmax) zmax=p[2];
   }
   const step = Math.max(1, Math.floor(N/3000));
-  CLOUD = []; for(let i=0;i<N;i+=step) CLOUD.push(pts[i]);
-  VOX = keys;                       // 可达集体素（供任务域判定用）
-  STATS = {n:N, voxels:keys.size, rmin, rmax, rhomin, rhomax, zmin, zmax, nJoint:NJ};
+  const cloud = []; for(let i=0;i<N;i+=step) cloud.push(pts[i]);
+  /* 每条臂的可达集与统计（多臂时用于分别显示/比对） */
+  const armStats = ptsArm.map((P, a) => {
+    const kk = new Set();
+    let aRmax = 0, aZmin = Infinity, aZmax = -Infinity;
+    for(const p of P){
+      kk.add(Math.floor(p[0]/vs)+','+Math.floor(p[1]/vs)+','+Math.floor(p[2]/vs));
+      aRmax = Math.max(aRmax, Math.hypot(p[0],p[1],p[2]));
+      aZmin = Math.min(aZmin, p[2]); aZmax = Math.max(aZmax, p[2]);
+    }
+    return {name:(ARMS[a]||{}).name || ('臂'+a), n:P.length, voxels:kk.size,
+            rmax:aRmax, zmin:aZmin, zmax:aZmax,
+            cloud: P.filter((_, i) => i % step === 0)};
+  });
+  return {N, vs, keys, cloud, armStats,
+          stats:{n:N, voxels:keys.size, rmin, rmax, rhomin, rhomax, zmin, zmax,
+                 nJoint:NJ, nArm:nA}};
+}
+function computeFeasible(){
+  const N = parseInt(document.getElementById('selN').value, 10) || 30000;
+  const R = sampleReach(N);
+  CLOUD = R.cloud;
+  ARMSTATS = R.armStats;
+  VOX = R.keys;                     // 可达集体素（供任务域判定用）
+  STATS = R.stats;
 }
 /* ---------------- 模型更新总入口 ---------------- */
 function updateAll(){
@@ -378,6 +501,9 @@ function syncCfgInputs(){
 function setModel(m, save){
   if(!m || !Array.isArray(m.links)){ alert('模型格式不对'); return; }
   MODEL = m; Q = []; closeForm();
+  /* ★ buildChain 是从"当前配置的臂列表"取模型的，所以手动换模型必须同步那一份，
+     否则页面显示的是旧模型（配置层引入后新增的坑）。 */
+  if(CONFIG) CONFIG.__arms = [m];
   document.getElementById('modal').classList.add('hidden');
   updateAll(); if(save !== false) saveLocal();
 }
@@ -478,12 +604,28 @@ function draw3D(){
 
   document.getElementById('camhint').textContent =
     'yaw '+Math.round(-cam.yaw/D2R)+'°  pitch '+Math.round(cam.pitch/D2R)+'°  zoom '+cam.zoom.toFixed(2);
-  document.getElementById('chain').innerHTML = '链：' + F.map((f,i)=>{
-    if(i===0) return '<b>O(整机原点)</b>';
-    const c=CHAIN[i-1];
-    const lim = c.movable ? (c.limits ? c.limits[0]+'~'+c.limits[1]+'°' : '不限') : '固定';
-    return ' → <b>'+f.name+'</b><span class="fx"> ['+c.joint+': '+ (c.movable?c.axLabel+' '+lim : 'fixed') +']</span>';
-  }).join('');
+  /* 链结构：单臂时就是原来那一行；多臂时每条臂各一行，用臂名开头 */
+  const chainHTML = () => {
+    const one = (a) => {
+      const F = fkAllArm(Q, a);
+      return F.map((f, i) => {
+        if (i === 0) return a === 0 ? '<b>O(整机原点)</b>' : '';
+        const c = CHAIN[ARMS[a].c0 + i - 1];
+        const lim = c.movable ? (c.limits ? c.limits[0] + '~' + c.limits[1] + '°' : '不限') : '固定';
+        return (i === 1 && a > 0 ? '' : ' → ') + '<b>' + f.name + '</b>' +
+               '<span class="fx"> [' + c.joint + ': ' +
+               (c.movable ? c.axLabel + ' ' + lim : 'fixed') + ']</span>';
+      }).join('');
+    };
+    if (armCount() === 1) return '链：' + one(0);
+    let h = '';
+    for (let a = 0; a < armCount(); a++) {
+      h += '<div style="margin-bottom:2px">' +
+           '<b style="color:#8fd0ff">' + (ARMS[a].name || ('臂' + a)) + '</b>：' + one(a) + '</div>';
+    }
+    return h;
+  };
+  document.getElementById('chain').innerHTML = chainHTML();
 }
 
 /* ---------------- 交互 ---------------- */

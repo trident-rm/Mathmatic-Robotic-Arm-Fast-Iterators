@@ -56,6 +56,10 @@ globalThis.__api = {
   get RULES(){return RULES}, get MAP(){return MAP},   // ★ 必须 getter：applyConfig 会重新赋值
   /* ★ 配置层（t12 起）：模型/规则/底盘都从配置来，引擎不再写死同济的值 */
   applyConfig, listConfigs, activeConfigId, configModel, initDefaultConfig,
+  /* ★ 多臂（t13 起）*/
+  armCount, armOfJointQI, armModel, armEnd, sampleReach,
+  get ARMS(){return ARMS}, get ARMSTATS(){return ARMSTATS},
+  fkAllArm, fkAllArms,
   get CONFIG(){return CONFIG},
   /* ★ t10 用：底盘碰撞箱 / 伸展尺寸（纯追加，不影响原有脚本） */
   chassisGeom, armStats, sizePanelHTML, drawSizeOverlay, draw3D, boxRange,
