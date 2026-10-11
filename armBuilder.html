@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>机械臂可行性集 · 建模器</title>
+<style>
+  :root{ --bg:#0f1420; --panel:#161d2d; --line:#26314a; --fg:#e6ecf7; --dim:#8fa0bf;
+         --box:#5a6580; --cres:#3ea6ff; --warn:#ffb454; --ok:#4ade80; --axis:#e879f9;
+         --red:#ff5f5f; --grn:#5fff8f; --blu:#5f9fff; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  #app{display:flex;flex-direction:column;height:100%}
+  #hdr{padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel);
+       display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  #title{font-size:14px;font-weight:600}
+  #model{color:var(--dim);font-size:11px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#0b1020;border:1px solid var(--line);border-radius:999px;
+        padding:3px 10px;font-size:11px;color:var(--dim);white-space:nowrap}
+  .chip b{color:var(--fg)}
+  #tools{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:11px;color:var(--dim);flex-wrap:wrap}
+  button{background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:#3d4c6e}
+  button.primary{border-color:#2f6fb0;color:#9fd4ff}
+  button.danger:hover{border-color:#a04040;color:#ff9a9a}
+  #views{flex:1;display:flex;min-height:0}
+  .cell{position:relative;min-width:0}
+  #left{flex:1;border-right:1px solid var(--line)}
+  #right{width:392px;background:var(--panel);display:flex;flex-direction:column}
+  #list{flex:1 1 42%;overflow-y:auto;padding:8px 10px;min-height:90px}
+  #dataPanel{flex:1 1 58%;border-top:1px solid var(--line);display:flex;
+    flex-direction:column;min-height:120px;background:#111827}
+  #dataPanel .head{background:#0e1524;border-bottom:1px solid var(--line);padding:8px 12px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px}
+  #dataBody{flex:1;overflow-y:auto;padding:4px 12px 10px;font-size:11.5px;line-height:1.7;color:var(--dim)}
+  #dataBody b{color:var(--fg)}
+  #dataBody table{width:100%;border-collapse:collapse;margin:2px 0 4px}
+  #dataBody td,#dataBody th{border-bottom:1px solid #1e2740;padding:2px 4px;text-align:left;font-weight:400}
+  #dataBody th{color:#7d8cab;font-size:10.5px}
+  #dataBody .num{text-align:right;font-variant-numeric:tabular-nums}
+  #dataBody .good{color:var(--ok)} #dataBody .bad{color:var(--warn)}
+  #dataBody .sect{margin:11px 0 5px;font-size:11px;font-weight:600;color:#9fd4ff;
+    border-bottom:1px solid #223052;padding-bottom:3px;letter-spacing:.02em}
+  #dataBody .grid{display:grid;grid-template-columns:1fr auto;gap:1px 10px}
+  #dataBody .grid span{color:var(--dim)} #dataBody .grid b{text-align:right;
+    font-variant-numeric:tabular-nums;font-weight:600}
+  #dataBody .one{color:var(--dim)}
+  #animMsg{color:#ffe066}
+  .cap{position:absolute;left:12px;top:10px;font-size:11px;color:var(--dim);
+       background:rgba(11,16,32,.72);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .hint{position:absolute;right:12px;bottom:10px;font-size:10px;color:#5d6b88}
+  #chain{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--dim);
+         background:rgba(11,16,32,.8);border:1px solid var(--line);border-radius:6px;
+         padding:6px 9px;max-width:88%;line-height:1.7}
+  #chain b{color:var(--fg)} #chain .fx{color:#8fa0bf}
+  canvas{display:block;width:100%;height:100%}
+  #legend{display:flex;gap:14px;padding:6px 14px;border-top:1px solid var(--line);
+          background:var(--panel);font-size:11px;color:var(--dim);flex-wrap:wrap}
+  .k{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+  /* ---- 右侧编辑面板 ---- */
+  #right .head{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:8px;justify-content:space-between}
+  #list{flex:1;overflow-y:auto;padding:8px 10px}
+  .row{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);
+    border-radius:7px;margin-bottom:6px;background:#121a29}
+  .row .idx{color:#5d6b88;font-variant-numeric:tabular-nums;min-width:16px}
+  .row .nm{flex:1;min-width:0}
+  .row .nm b{display:block;font-weight:600;font-size:12px}
+  .row .nm span{color:var(--dim);font-size:10.5px}
+  .row button{padding:2px 7px;font-size:10.5px}
+  #form,#cform{border-top:1px solid var(--line);padding:10px 12px;background:#111827;
+        max-height:66%;overflow-y:auto;display:none}
+  #form.on,#cform.on{display:block}
+  #cform{border-top-color:#4a4322}
+  #cform .fld > label{min-width:74px}
+  #cform input[type=number]{width:60px}
+  #cform select{max-width:250px}
+  /* ---- 上下分隔条：拖动改变「模型链 / 可达域」的高度 ---- */
+  #split{flex:0 0 9px;cursor:ns-resize;background:#0b1020;position:relative;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);z-index:3}
+  #split:hover,#split.on{background:#22304e}
+  #split::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:48px;height:3px;border-radius:2px;background:#3d4c6e;pointer-events:none}
+  #split:hover::after,#split.on::after{background:#9fd4ff}
+  .sub{color:#5d6b88;font-size:10.5px;margin:-3px 0 7px}
+  .fld{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+  .fld > label{color:var(--dim);min-width:66px;font-size:11.5px}
+  input[type=text],input[type=number],select{background:#0b1020;color:var(--fg);
+    border:1px solid var(--line);border-radius:5px;padding:3px 6px;font-size:11.5px;font-family:inherit}
+  input[type=number]{width:74px}
+  input[type=text]{width:104px}
+  .rad{display:inline-flex;align-items:center;gap:4px;color:var(--fg);font-size:11.5px;cursor:pointer}
+  .note{color:#5d6b88;font-size:10.5px}
+  .okmsg{color:var(--ok)} .badmsg{color:var(--red)}
+  /* ---- 弹窗 ---- */
+  #modal{position:fixed;inset:0;background:rgba(6,9,16,.88);z-index:50;
+    display:flex;align-items:center;justify-content:center}
+  #modal.hidden{display:none}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:26px 30px;max-width:460px;text-align:center}
+  .card h2{margin:0 0 6px;font-size:17px}
+  .card p{color:var(--dim);font-size:12px;margin:0 0 18px;line-height:1.7}
+  .card .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .card button{padding:10px 18px;font-size:13px;border-radius:9px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <div><div id="title">机械臂可行性集 · 建模器</div><div id="model"></div></div>
+    <div class="chips" id="chips"></div>
+    <div id="tools">
+      <label class="k">装配臂位置
+        <input type="number" id="inCx" step="10" value="-200" style="width:64px">
+        <input type="number" id="inCy" step="10" value="-200" style="width:64px">
+        <input type="number" id="inCz" step="10" value="800"  style="width:64px">
+      </label>
+      <label class="k">安装yaw
+        <input type="number" id="inYaw" step="15" value="-90" style="width:62px">
+      </label>
+      <label class="k">映射
+        <select id="selMap">
+          <option value="swap">核心在前 (X_b=−X_O, Y_b=−Y_O)</option>
+          <option value="side">核心在侧 (X_b=−Y_O, Y_b=+X_O)</option>
+        </select>
+      </label>
+      <label class="k"><input type="checkbox" id="cbFrames" checked> 坐标架</label>
+      <label class="k"><input type="checkbox" id="cbChassis" checked> 底盘框</label>
+      <label class="k"><input type="checkbox" id="cbLWH" checked> 长宽高框</label>
+      <label class="k"><input type="checkbox" id="cbBall" checked> 球</label>
+      <button id="btnFrames">▣ 隐藏框</button>
+      <label class="k">采样
+        <select id="selN">
+          <option value="10000">1万</option>
+          <option value="30000" selected>3万</option>
+          <option value="100000">10万</option>
+        </select>
+      </label>
+      <button id="btnChassis">▦ 底盘 / 尺寸</button>
+      <button id="btnSave">保存 JSON</button>
+      <button id="btnLoad">读取文件</button>
+      <button id="btnDemo">示例</button>
+      <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+    </div>
+  </div>
+  <div id="views">
+    <div class="cell" id="left">
+      <canvas id="c3d"></canvas>
+      <div class="cap">任务空间 · 拖拽旋转 / 滚轮缩放 · 原点坐标系 O 常显</div>
+      <div id="chain"></div>
+      <div class="hint" id="camhint"></div>
+    </div>
+    <div class="cell" id="right">
+      <div class="head">
+        <span>模型链（点击编辑）</span>
+        <button id="btnAdd" class="primary">＋ 建立坐标系</button>
+      </div>
+      <div id="list"></div>
+      <div id="cform"></div>
+      <div id="form"></div>
+      <div id="split" title="上下拖动 = 调「模型链 / 可达域」的高度 · 双击复原"></div>
+      <div id="dataPanel">
+        <div class="head">
+          <span>可达域 / 任务域数据</span>
+          <button id="btnAnim" class="primary">▶ 示例装配动画</button>
+        </div>
+        <div id="animMsg" style="padding:5px 12px;font-size:11.5px;background:#0b1020;
+             border-bottom:1px solid var(--line);min-height:18px"></div>
+        <div id="dataBody">载入模型后显示…</div>
+      </div>
+    </div>
+  </div>
+  <div id="legend">
+    <span class="k"><i class="sw" style="background:var(--red)"></i>X</span>
+    <span class="k"><i class="sw" style="background:var(--grn)"></i>Y</span>
+    <span class="k"><i class="sw" style="background:var(--blu)"></i>Z</span>
+    <span class="k"><i class="sw" style="background:#e8933a"></i>杆（相邻坐标系间距）</span>
+    <span class="k"><i class="sw" style="background:var(--axis)"></i>关节轴</span>
+    <span class="k"><i class="sw" style="background:#ffe066"></i>当前关节</span>
+    <span class="k"><i class="sw" style="background:var(--cres)"></i>可达点云</span>
+    <span class="k"><i class="sw" style="background:#ffd400"></i>底盘碰撞箱</span>
+    <span class="k"><i class="sw" style="background:#00e5c0"></i>长宽高框 1200×1200×1100</span>
+    <span class="k"><i class="sw" style="background:#a78bfa"></i>限制球 ⌀1500（球心距接地中心 480）</span>
+    <span class="k" id="lgJoints"></span>
+  </div>
+</div>
+
+<div id="modal">
+  <div class="card">
+    <h2>机械臂可行性集</h2>
+    <p>只给「杆 + 关节 + 坐标系 + 角度限位」，算出带限位的可达集。<br>
+       全部在本页面内计算，<b>不需要 MATLAB</b>。</p>
+    <div class="btns">
+      <button id="mDemo" class="primary">使用示例</button>
+      <button id="mLoad">读取文件（.json）</button>
+      <button id="mLast">上次的模型</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ==================================================================
+   机械臂建模器（单文件、零依赖、不需要 MATLAB）
+   - 模型：MODEL = { name, base:{xyz,yaw}, links:[ ... ] }
+   - 每个 link：{ name, joint, type, posMode:'origin'|'parent', pos:[x,y,z](mm),
+                  axes:{x,y,z}（新坐标系三轴对应父系的哪个轴）, axis（自身转轴）,
+                  limits:[lo,hi]|null }
+   - 正解：T_i = T_{i-1} · T_fixed(Rf, offset) · Rot(axis, q_i)
+   ================================================================== */
+const D2R = Math.PI/180;
+const I3  = [[1,0,0],[0,1,0],[0,0,1]];
+const AXES = ['+X','-X','+Y','-Y','+Z','-Z'];
+
+function axisVec(s){ return ({'+X':[1,0,0],'-X':[-1,0,0],'+Y':[0,1,0],
+                              '-Y':[0,-1,0],'+Z':[0,0,1],'-Z':[0,0,-1]})[s] || [0,0,1]; }
+function axisLabel(v){ const a=[Math.abs(v[0]),Math.abs(v[1]),Math.abs(v[2])];
+  const i=a[0]>=a[1]&&a[0]>=a[2]?0:(a[1]>=a[2]?1:2);
+  return (v[i]<0?'-':'+')+'XYZ'[i]; }
+function mul3(A,B){ const C=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=A[i][k]*B[k][j];C[i][j]=s;} return C; }
+function mulv(A,v){ return [A[0][0]*v[0]+A[0][1]*v[1]+A[0][2]*v[2],
+                            A[1][0]*v[0]+A[1][1]*v[1]+A[1][2]*v[2],
+                            A[2][0]*v[0]+A[2][1]*v[1]+A[2][2]*v[2]]; }
+function addv(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
+function subv(a,b){ return [a[0]-b[0],a[1]-b[1],a[2]-b[2]]; }
+function T3(A){ return [[A[0][0],A[1][0],A[2][0]],[A[0][1],A[1][1],A[2][1]],[A[0][2],A[1][2],A[2][2]]]; }
+function det3(A){ return A[0][0]*(A[1][1]*A[2][2]-A[1][2]*A[2][1])
+                       - A[0][1]*(A[1][0]*A[2][2]-A[1][2]*A[2][0])
+                       + A[0][2]*(A[1][0]*A[2][1]-A[1][1]*A[2][0]); }
+function rotAxis(u,th){ const x=u[0],y=u[1],z=u[2],c=Math.cos(th),s=Math.sin(th),C=1-c;
+  return [[c+x*x*C,x*y*C-z*s,x*z*C+y*s],[y*x*C+z*s,c+y*y*C,y*z*C-x*s],[z*x*C-y*s,z*y*C+x*s,c+z*z*C]]; }
+function rotZdeg(d){ const a=d*D2R,c=Math.cos(a),s=Math.sin(a);
+  return [[c,-s,0],[s,c,0],[0,0,1]]; }
+
+/* ---------------- 示例模型（= 同济臂，7 段） ---------------- */
+function demoModel(){
+  const L = (name,joint,type,pos,axes,axis,limits)=>
+      ({name,joint,type,posMode:'parent',pos,axes,axis,limits});
+  const ID = {x:'+X',y:'+Y',z:'+Z'};
+  return { name:'同济工程机械臂（示例）',
+    // ★ base yaw = -90：把臂的"前方"(本体 +Y)转到 +X。
+    //   配合 MAP.swap=true（Q 轴映射到 -X），零位时 末端 z(+X) 与 Q轴(-X) 正好相对
+    //   ⇒ 正面装配，解算不会出现"绕到反面"的抽象行为（见数据面板"零位朝向校核"）
+    base:{xyz:[0,0,0], yaw:-90}, links:[
+    {name:'base_link', joint:'base_joint', type:'revolute', posMode:'origin', pos:[0,0,0],
+     axes:ID, axis:'+Z', limits:null},
+    L('link1','joint1','revolute',[0,0,75],      ID,                    '+X', [0,122]),
+    L('link2','joint2','revolute',[0,290,0],     ID,                    '-X', [-90,200]),
+    L('link3','joint3','revolute',[85.5,0,0],    ID,                    '+Z', null),
+    L('link4','joint4','revolute',[0,-30,401.47],ID,                    '+X', [-16,220]),
+    L('link5','joint5','revolute',[0,0,0],       {x:'+X',y:'-Z',z:'+Y'},'+Z', null),
+    L('gripper','gripper_fix','fixed',[0,0,211], ID,                    '+Z', null)
+  ]};
+}
+
+/* ---------------- 由 MODEL 生成可计算的链 ---------------- */
+let MODEL = null, CHAIN = [], NJ = 0, Q = [], ACTIVE = -1, SHOW_FRAMES = true;
+let CLOUD = [], STATS = {}, CURVEPTS = null;
+
+/* ---------------- 底盘碰撞箱 / 伸展尺寸：规则侧状态（存在 localStorage，不进模型 JSON） ----------------
+   CHASSIS.pos 默认 base 系 (0, 140, 0)；zDir=−1 ⇒ 从中心点往 −Z 长 size[2]
+   ⇒ 中心点就是碰撞箱【上表面中心】，底面中心 = 接地中心 = base (0,140,−105)          */
+let CHASSIS = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
+/* 规则：长宽高 ≤ 1200×1200×1100；直径 1500 的球，球心距接地中心 480 */
+let SIZER   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+let SHOWBOX = { chassis:true, lwh:true, ball:true };
+let PANEL_REST = '';            // 数据面板里除"底盘/尺寸"段以外的 HTML（改底盘参数时只重画尺寸段）
+
+function buildChain(){
+  CHAIN = []; NJ = 0;
+  let R = rotZdeg(MODEL.base.yaw), t = MODEL.base.xyz.slice();   // 父系 = 整机原点系
+  MODEL.links.forEach((L, i) => {
+    let off;
+    if(L.posMode === 'origin' && i > 0){
+      // 在整机原点系里给的绝对位置 → 换算成相对父系的偏移
+      off = mulv(T3(R), subv(L.pos, t));
+    } else {
+      off = L.pos.slice();
+    }
+    const Rf = frameRot(L.axes);
+    const movable = L.type !== 'fixed';
+    CHAIN.push({name:L.name, joint:L.joint, type:L.type, movable, offset:off, Rf,
+                axis:axisVec(L.axis), axLabel:L.axis,
+                limits:L.limits ? L.limits.slice() : null});
+    if(movable) NJ++;
+    t = addv(mulv(R, off), t);
+    R = mul3(R, Rf);
+  });
+  syncQ();
+}
+function frameRot(ax){
+  const c0 = axisVec(ax.x), c1 = axisVec(ax.y), c2 = axisVec(ax.z);
+  return [[c0[0],c1[0],c2[0]],[c0[1],c1[1],c2[1]],[c0[2],c1[2],c2[2]]];
+}
+function frameOK(ax){
+  const R = frameRot(ax);
+  const det = det3(R);
+  const dup = (ax.x===ax.y)||(ax.y===ax.z)||(ax.x===ax.z);
+  return {ok: !dup && Math.abs(det-1) < 1e-9, det, dup, R};
+}
+function qLimits(){
+  return CHAIN.filter(c=>c.movable).map(c => {
+    const l = c.limits ? [Math.min(...c.limits), Math.max(...c.limits)] : [-180,180];
+    return [l[0] - LIM_WIDEN, l[1] + LIM_WIDEN];     // LIM_WIDEN 用于"放宽限位能救回多少"的试验
+  });
+}
+let LIM_WIDEN = 0;
+function syncQ(){                       // 关节数变化就重置，否则保留用户拖动值
+  const lim = qLimits();
+  if(Q.length !== lim.length){ Q = lim.map(([lo,hi]) => (lo<=0&&0<=hi) ? 0 : (lo+hi)/2); }
+  else { Q = Q.map((v,i) => Math.min(Math.max(v, lim[i][0]), lim[i][1])); }
+}
+
+/* ---------------- 正解 ---------------- */
+function fkAll(q){
+  let R = rotZdeg(MODEL.base.yaw), t = MODEL.base.xyz.slice();
+  const out = [{name:'O(整机原点)', joint:'', R:R, t:t, axis:[0,0,0], movable:false, qi:-1}];
+  let qi = 0;
+  for(const c of CHAIN){
+    let Rj = I3;
+    if(c.movable){ Rj = rotAxis(c.axis, (q[qi]||0)*D2R); qi++; }
+    const tNew = addv(mulv(R, c.offset), t);   // 用【更新前】的 R
+    R = mul3(mul3(R, c.Rf), Rj);
+    t = tNew;
+    out.push({name:c.name, joint:c.joint, R:R, t:t, axis:c.axis, movable:c.movable, qi:qi-1});
+  }
+  return out;
+}
+
+/* ---------------- 采样 + 体素化（全部在浏览器里算） ---------------- */
+function computeFeasible(){
+  const N = parseInt(document.getElementById('selN').value, 10) || 30000;
+  const lim = qLimits();
+  const q = new Array(NJ);
+  const pts = new Array(N);
+  for(let s=0;s<N;s++){
+    for(let i=0;i<NJ;i++){ const [lo,hi]=lim[i]; q[i] = lo + Math.random()*(hi-lo); }
+    const F = fkAll(q);
+    pts[s] = F[F.length-1].t.slice();
+  }
+  const vs = 50, keys = new Set();
+  let rmin = Infinity, rmax = 0, zmin = Infinity, zmax = -Infinity, rhomin = Infinity, rhomax = 0;
+  for(const p of pts){
+    keys.add(Math.floor(p[0]/vs)+','+Math.floor(p[1]/vs)+','+Math.floor(p[2]/vs));
+    const r = Math.hypot(p[0],p[1],p[2]); if(r<rmin) rmin=r; if(r>rmax) rmax=r;
+    const rh = Math.hypot(p[0],p[1]);     if(rh<rhomin) rhomin=rh; if(rh>rhomax) rhomax=rh;
+    if(p[2]<zmin) zmin=p[2]; if(p[2]>zmax) zmax=p[2];
+  }
+  const step = Math.max(1, Math.floor(N/3000));
+  CLOUD = []; for(let i=0;i<N;i+=step) CLOUD.push(pts[i]);
+  VOX = keys;                       // 可达集体素（供任务域判定用）
+  STATS = {n:N, voxels:keys.size, rmin, rmax, rhomin, rhomax, zmin, zmax, nJoint:NJ};
+}
+/* ---------------- 模型更新总入口 ---------------- */
+function updateAll(){
+  buildChain();
+  const t0 = performance.now();
+  computeFeasible();
+  const dt = performance.now() - t0;
+  CURVEPTS = fkAll(Q);
+  renderHeader(dt);
+  draw3D(); drawList();
+}
+function renderHeader(dt){
+  document.getElementById('title').textContent = MODEL.name || '未命名';
+  document.getElementById('model').textContent =
+      '纯杆+关节 · 无碰撞几何 · 全部在浏览器内计算（无需 MATLAB）';
+  const s = STATS;
+  document.getElementById('chips').innerHTML = [
+    chip('关节数', NJ),
+    chip('采样', s.n.toLocaleString()),
+    chip('末端到原点', Math.round(s.rmin)+'~'+Math.round(s.rmax)+' mm'),
+    chip('距 Z 轴', Math.round(s.rhomin)+'~'+Math.round(s.rhomax)+' mm'),
+    chip('高度 z', Math.round(s.zmin)+'~'+Math.round(s.zmax)+' mm'),
+    chip('体素 50mm', s.voxels),
+    chip('计算耗时', dt.toFixed(0)+' ms')
+  ].join('');
+  document.getElementById('lgJoints').textContent = CHAIN.filter(c=>c.movable)
+      .map(c=>c.joint).join('　');
+}
+const chip = (k,v) => `<span class="chip">${k} <b>${v}</b></span>`;
+
+/* ==================================================================
+   右侧：模型编辑面板
+   ================================================================== */
+function drawList(){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const F0 = fkAll(Q);                       // 当前位形下的各系原点（用于显示位置）
+  MODEL.links.forEach((L, i) => {
+    const c = CHAIN[i], o = F0[i+1].t;
+    const lim = c.limits ? (c.limits[0]+'~'+c.limits[1]+'°') : (c.movable ? '不限' : '—');
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML =
+      `<span class="idx">${i+1}</span>
+       <span class="nm"><b>${L.name}</b>
+         <span>${L.joint} · ${c.type==='fixed'?'固定':'转动'} ${c.movable?c.axLabel:''} ${lim}</span>
+         <span>原点 [${o.map(v=>v.toFixed(1)).join(', ')}] mm</span></span>
+       <button data-i="${i}" class="ed">编辑</button>
+       <button data-i="${i}" class="del danger">删除</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('button.ed').forEach(b => b.onclick = () => openForm(+b.dataset.i));
+  list.querySelectorAll('button.del').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, n = MODEL.links.length - i;
+    const msg = (n > 1) ? `删除「${MODEL.links[i].name}」及其之后的 ${n-1} 个坐标系？`
+                        : `删除「${MODEL.links[i].name}」？`;
+    if(confirm(msg)){ MODEL.links.splice(i); closeForm(); updateAll(); saveLocal(); }
+  });
+}
+
+let EDIT = -1;      // -1 = 新增
+function openForm(i){
+  EDIT = (i === undefined) ? -1 : i;
+  const isNew = EDIT < 0;
+  const L = isNew
+    ? {name:'link'+(MODEL.links.length+1), joint:'joint'+(MODEL.links.length+1),
+       type:'revolute', posMode:(MODEL.links.length? 'parent':'origin'), pos:[0,0,0],
+       axes:{x:'+X',y:'+Y',z:'+Z'}, axis:'+Z', limits:null}
+    : JSON.parse(JSON.stringify(MODEL.links[EDIT]));
+  const first = (MODEL.links.length === 0);
+  const parentName = first ? '整机原点 O' : MODEL.links[MODEL.links.length-1].name;
+  const f = document.getElementById('form');
+  f.className = 'on';
+  f.innerHTML = `
+    <div class="fld" style="justify-content:space-between">
+      <b>${isNew?'建立新坐标系':'编辑：'+L.name}</b>
+      <span class="note">${first?'第一个坐标系':(isNew?'会接在链末':'')} · 父坐标系 = ${parentName}</span>
+    </div>
+    <div class="fld"><label>名称</label><input type="text" id="fName" value="${L.name}">
+      <label>关节名</label><input type="text" id="fJoint" value="${L.joint}"></div>
+    <div class="fld"><label>类型</label>
+      <label class="rad"><input type="radio" name="fType" value="revolute" ${L.type!=='fixed'?'checked':''}>转动</label>
+      <label class="rad"><input type="radio" name="fType" value="fixed" ${L.type==='fixed'?'checked':''}>固定（无自由度）</label></div>
+
+    <div class="fld"><label>位置</label>
+      <label class="rad"><input type="radio" name="fPos" value="parent" ${L.posMode==='parent'?'checked':''}>相对上一坐标系</label>
+      <label class="rad"><input type="radio" name="fPos" value="origin" ${L.posMode==='origin'?'checked':''}>相对整机原点</label>
+      ${first?'<span class="note">（base 默认在原点）</span>':''}</div>
+    <div class="fld"><label></label>
+      X <input type="number" id="fPx" step="0.01" value="${L.pos[0]}">
+      Y <input type="number" id="fPy" step="0.01" value="${L.pos[1]}">
+      Z <input type="number" id="fPz" step="0.01" value="${L.pos[2]}"> mm
+      <span class="note" id="posNote"></span></div>
+
+    <div class="fld"><label>坐标系变换</label><span class="note">新坐标系的三个轴分别对齐父系的哪个轴</span></div>
+    <div class="fld"><label></label>
+      新 X → ${sel('fAx',L.axes.x)}　新 Y → ${sel('fAy',L.axes.y)}　新 Z → ${sel('fAz',L.axes.z)}
+      <span id="rotMsg" class="note"></span></div>
+
+    <div class="fld"><label>转动轴</label>${sel('fAxis',L.axis)}
+      <span class="note">（在新坐标系自身下）</span></div>
+    <div class="fld"><label>限位角</label>
+      下限 <input type="number" id="fLo" step="1" value="${L.limits?L.limits[0]:''}">
+      上限 <input type="number" id="fHi" step="1" value="${L.limits?L.limits[1]:''}"> 度
+      <span class="note">留空 = 不限位</span></div>
+
+    <div class="fld" style="justify-content:flex-end;gap:8px">
+      <button id="fCancel">取消</button>
+      <button id="fOK" class="primary">${isNew?'确认建立':'保存修改'}</button></div>`;
+  ['fAx','fAy','fAz'].forEach(id => document.getElementById(id).onchange = checkRot);
+  document.getElementById('fCancel').onclick = closeForm;
+  document.getElementById('fOK').onclick = submitForm;
+  checkRot();
+  function updPosNote(){
+    const m = f.querySelector('input[name=fPos]:checked').value;
+    document.getElementById('posNote').textContent =
+      m === 'origin' ? '（在整机原点系 O 下的绝对坐标，零位时）' : '（在上一个坐标系下的位移）';
+  }
+  f.querySelectorAll('input[name=fPos]').forEach(r => r.onchange = updPosNote);
+  updPosNote();
+}
+function sel(id, cur){
+  return `<select id="${id}">${AXES.map(a=>`<option ${a===cur?'selected':''}>${a}</option>`).join('')}</select>`;
+}
+function checkRot(){
+  const ax = {x:document.getElementById('fAx').value,
+              y:document.getElementById('fAy').value,
+              z:document.getElementById('fAz').value};
+  const r = frameOK(ax), el = document.getElementById('rotMsg');
+  if(r.dup){ el.className = 'badmsg'; el.textContent = '✗ 三个轴不能重复'; }
+  else if(Math.abs(r.det-1) > 1e-9){
+    el.className = 'badmsg';
+    el.textContent = '✗ 不是右手系（det=' + r.det.toFixed(0) + '），请调整';
+  } else { el.className = 'okmsg'; el.textContent = '✓ 右手系'; }
+}
+function submitForm(){
+  const f = document.getElementById('form');
+  const ax = {x:document.getElementById('fAx').value,
+              y:document.getElementById('fAy').value,
+              z:document.getElementById('fAz').value};
+  if(!frameOK(ax).ok){ alert('坐标系变换不是右手系（或有重复轴），请修正'); return; }
+  const loS = document.getElementById('fLo').value.trim();
+  const hiS = document.getElementById('fHi').value.trim();
+  const type = f.querySelector('input[name=fType]:checked').value;
+  const L = {
+    name: document.getElementById('fName').value.trim() || 'link',
+    joint: document.getElementById('fJoint').value.trim() || 'joint',
+    type,
+    posMode: f.querySelector('input[name=fPos]:checked').value,
+    pos: [ +document.getElementById('fPx').value || 0,
+           +document.getElementById('fPy').value || 0,
+           +document.getElementById('fPz').value || 0 ],
+    axes: ax,
+    axis: document.getElementById('fAxis').value,
+    limits: (type === 'fixed' || loS === '' || hiS === '') ? null
+            : [Math.min(+loS,+hiS), Math.max(+loS,+hiS)]
+  };
+  if(EDIT < 0) MODEL.links.push(L); else MODEL.links[EDIT] = L;
+  closeForm(); updateAll(); saveLocal();
+}
+function closeForm(){ document.getElementById('form').className = ''; EDIT = -1; }
+
+/* ---------------- 存取 ---------------- */
+let LS_BLOCKED = false;      // 有些浏览器（如 macOS Safari 打开本地文件）会禁用 localStorage
+function warnNoLS(){
+  if(LS_BLOCKED) return;
+  LS_BLOCKED = true;
+  const t = document.getElementById('tools');
+  if(!t || document.getElementById('lsWarn')) return;
+  const s = document.createElement('span');
+  s.id = 'lsWarn'; s.className = 'chip';
+  s.style.cssText = 'border-color:#7a5a20;color:#ffb454';
+  s.textContent = '⚠ 浏览器禁用了本地存档，请用「保存 JSON」保存模型';
+  t.insertBefore(s, t.firstChild);
+}
+function cfgObj(){                       // 规则侧设置的快照（模型之外的一切）
+  return { init: RULES.init, swap: MAP.swap, baseH: RULES.baseH,
+           nSample: document.getElementById('selN').value,
+           yaw: MODEL ? MODEL.base.yaw : -90,
+           chassis: CHASSIS, chassisV: CHASSIS_V,      // ★ 底盘箱（带默认值版本号）
+           sizer: SIZER, showbox: SHOWBOX,             // ★ 伸展尺寸 / 显示开关
+           splitPct: SPLIT_PCT };                      // ★ 右栏上下分隔条位置
+}
+function saveLocal(){
+  try{
+    localStorage.setItem('armBuilderModel', JSON.stringify(MODEL));
+    // ★ 规则侧设置也要存：装配臂位置 / 映射 / 底盘高 / 采样数 / 底盘箱 / 伸展尺寸
+    localStorage.setItem('armBuilderCfg', JSON.stringify(cfgObj()));
+  }catch(e){ warnNoLS(); }
+}
+function loadLocal(){
+  try{ const s = localStorage.getItem('armBuilderModel'); return s?JSON.parse(s):null; }
+  catch(e){ warnNoLS(); return null; }
+}
+/* 恢复上次的规则侧设置（否则刷新一下就回到默认） */
+function loadCfg(){
+  try{
+    const s = localStorage.getItem('armBuilderCfg'); if(!s) return;
+    const c = JSON.parse(s);
+    if(c.init) Object.assign(RULES.init, c.init);
+    if(typeof c.swap === 'boolean') MAP.swap = c.swap;
+    if(c.baseH) RULES.baseH = c.baseH;
+    if(c.nSample) document.getElementById('selN').value = c.nSample;
+    /* ★ 底盘箱要带版本号：改动 CHASSIS 默认值后，老存档不能把新默认值盖回去 */
+    if(c.chassis && c.chassisV === CHASSIS_V) Object.assign(CHASSIS, c.chassis);
+    if(c.sizer)   Object.assign(SIZER,   c.sizer);
+    if(c.showbox) Object.assign(SHOWBOX, c.showbox);
+    if(typeof c.splitPct === 'number'){ SPLIT_PCT = c.splitPct; applySplit(); }
+    syncBoxChecks();
+  }catch(e){ warnNoLS(); }
+}
+/* 把当前设置回填到控件上 */
+function syncCfgInputs(){
+  document.getElementById('inCx').value = RULES.init.x;
+  document.getElementById('inCy').value = RULES.init.y;
+  document.getElementById('inCz').value = RULES.init.z;
+  document.getElementById('selMap').value = MAP.swap ? 'swap' : 'side';
+  if(MODEL) document.getElementById('inYaw').value = MODEL.base.yaw;
+}
+function setModel(m, save){
+  if(!m || !Array.isArray(m.links)){ alert('模型格式不对'); return; }
+  MODEL = m; Q = []; closeForm();
+  document.getElementById('modal').classList.add('hidden');
+  updateAll(); if(save !== false) saveLocal();
+}
+
+/* ==================================================================
+   三维显示
+   ================================================================== */
+let cam = {yaw:-0.9, pitch:0.42, zoom:1};
+const FX=['#ff5f5f','#5fff8f','#5f9fff'], FXN=['X','Y','Z'];
+function fitCanvas(c){ const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  c.width=Math.max(1,Math.round(r.width*dpr)); c.height=Math.max(1,Math.round(r.height*dpr));
+  const g=c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); return {w:r.width,h:r.height}; }
+function proj(p){ const a=cam.yaw,b=cam.pitch;
+  const x1=p[0]*Math.cos(a)-p[1]*Math.sin(a), y1=p[0]*Math.sin(a)+p[1]*Math.cos(a), z1=p[2];
+  return [x1, -y1*Math.sin(b)+z1*Math.cos(b), y1*Math.cos(b)+z1*Math.sin(b)]; }
+
+function draw3D(){
+  const c = document.getElementById('c3d'); if(!MODEL) return;
+  const {w,h} = fitCanvas(c); const g = c.getContext('2d'); g.clearRect(0,0,w,h);
+  const F = fkAll(Q);
+
+  let pts = CLOUD.slice();
+  if(!pts.length) pts = F.map(f=>f.t);
+  let cx=0,cy=0,cz=0; for(const p of pts){cx+=p[0];cy+=p[1];cz+=p[2];}
+  const n=Math.max(1,pts.length); cx/=n;cy/=n;cz/=n;
+  let rad=1; for(const p of pts) rad=Math.max(rad, Math.hypot(p[0]-cx,p[1]-cy,p[2]-cz));
+  if(rad<50) rad=300;
+  const sc = Math.min(w,h)*0.42/rad*cam.zoom;
+  const S = p => { const q=proj([p[0]-cx,p[1]-cy,p[2]-cz]); return [w/2+q[0]*sc, h/2-q[1]*sc, q[2]]; };
+
+  const label = (txt,x,y,color,font)=>{ g.font=font||"11px system-ui,'Microsoft YaHei'";
+    g.lineWidth=3; g.strokeStyle='rgba(10,14,24,.85)'; g.strokeText(txt,x,y);
+    g.fillStyle=color; g.fillText(txt,x,y); };
+  const triad = (o,R,len,lw,names,font)=>{ for(let a=0;a<3;a++){
+      const d=[R[0][a],R[1][a],R[2][a]];
+      const p0=S(o), p1=S([o[0]+d[0]*len,o[1]+d[1]*len,o[2]+d[2]*len]);
+      g.strokeStyle=FX[a]; g.lineWidth=lw;
+      g.beginPath(); g.moveTo(p0[0],p0[1]); g.lineTo(p1[0],p1[1]); g.stroke();
+      if(names) label(FXN[a], p1[0]+3, p1[1]-3, FX[a], font); } };
+
+  // 地面网格
+  g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=1;
+  const E=Math.ceil(rad/200)*200;
+  for(let v=-E;v<=E;v+=200){
+    const a1=S([v+cx,-E+cy,-cz]),a2=S([v+cx,E+cy,-cz]);
+    const b1=S([-E+cx,v+cy,-cz]),b2=S([E+cx,v+cy,-cz]);
+    g.beginPath(); g.moveTo(a1[0],a1[1]); g.lineTo(a2[0],a2[1]);
+    g.moveTo(b1[0],b1[1]); g.lineTo(b2[0],b2[1]); g.stroke();
+  }
+  // 底盘碰撞箱 / 长宽高框 / 限制球（画在点云与骨架【下层】，避免盖住臂）
+  if(typeof drawSizeOverlay === 'function') drawSizeOverlay(g, S, label);
+  // 点云
+  if(CLOUD.length){
+    const q=CLOUD.map(p=>S(p)).sort((A,B)=>B[2]-A[2]);
+    g.globalAlpha=.75; g.fillStyle='#3ea6ff';
+    for(const s of q){ g.beginPath(); g.arc(s[0],s[1],1.7,0,6.2832); g.fill(); }
+    g.globalAlpha=1;
+  }
+  // 杆 = 相邻坐标系连线
+  if(F.length>1){
+    g.strokeStyle='#e8933a'; g.lineWidth=7; g.lineJoin='round'; g.lineCap='round';
+    g.beginPath(); F.forEach((f,i)=>{const s=S(f.t); i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1]);});
+    g.stroke(); g.lineCap='butt';
+  }
+  // 各坐标系
+  for(let i=1;i<F.length;i++){
+    const f=F[i];
+    const isO = Math.hypot(f.t[0],f.t[1],f.t[2])<1e-6 &&
+                Math.abs(f.R[0][0]-1)<1e-9 && Math.abs(f.R[1][1]-1)<1e-9 && Math.abs(f.R[2][2]-1)<1e-9;
+    if(SHOW_FRAMES && !isO) triad(f.t,f.R,95,1.8,true,"bold 12px system-ui,'Microsoft YaHei'");
+    const s=S(f.t); label(f.name, s[0]+7, s[1]+15, '#c9d6ee', "11px system-ui,'Microsoft YaHei'");
+  }
+  // 原点坐标系（常显）
+  triad([0,0,0], I3, 170, 2.6, true, "bold 12px system-ui,'Microsoft YaHei'");
+  const so=S([0,0,0]); label('O 原点', so[0]+7, so[1]-7, '#ffffff', "bold 12px system-ui,'Microsoft YaHei'");
+  // 关节轴（最后画、更长）
+  for(let i=1;i<F.length;i++){
+    const f=F[i]; if(!f.movable) continue;
+    const nn=Math.hypot(...f.axis); if(nn<1e-12) continue;
+    const d=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+    const L2=210, p0=S(f.t), p1=S([f.t[0]+d[0]*L2,f.t[1]+d[1]*L2,f.t[2]+d[2]*L2]);
+    const hot=(f.qi===ACTIVE);
+    g.strokeStyle=hot?'#ffe066':'#e879f9'; g.lineWidth=hot?4:3;
+    g.beginPath(); g.moveTo(p0[0],p0[1]); g.lineTo(p1[0],p1[1]); g.stroke();
+    const ang=Math.atan2(p1[1]-p0[1],p1[0]-p0[0]);
+    g.beginPath(); g.moveTo(p1[0],p1[1]);
+    g.lineTo(p1[0]-11*Math.cos(ang-.4),p1[1]-11*Math.sin(ang-.4));
+    g.lineTo(p1[0]-11*Math.cos(ang+.4),p1[1]-11*Math.sin(ang+.4));
+    g.closePath(); g.fillStyle=g.strokeStyle; g.fill();
+    label(f.joint, p1[0]+5, p1[1]+13, g.strokeStyle, "bold 11px system-ui,'Microsoft YaHei'");
+  }
+  // 末端
+  const ee=F[F.length-1].t, se=S(ee);
+  g.fillStyle='#4ade80'; g.beginPath(); g.arc(se[0],se[1],5,0,6.2832); g.fill();
+
+  if(typeof drawCoreOverlay === 'function') drawCoreOverlay(g, S, label);   // 科技核心示意
+  if(typeof drawJointArcs === 'function') drawJointArcs(g, S, F, label);    // 各关节实际转角
+
+  document.getElementById('camhint').textContent =
+    'yaw '+Math.round(-cam.yaw/D2R)+'°  pitch '+Math.round(cam.pitch/D2R)+'°  zoom '+cam.zoom.toFixed(2);
+  document.getElementById('chain').innerHTML = '链：' + F.map((f,i)=>{
+    if(i===0) return '<b>O(整机原点)</b>';
+    const c=CHAIN[i-1];
+    const lim = c.movable ? (c.limits ? c.limits[0]+'~'+c.limits[1]+'°' : '不限') : '固定';
+    return ' → <b>'+f.name+'</b><span class="fx"> ['+c.joint+': '+ (c.movable?c.axLabel+' '+lim : 'fixed') +']</span>';
+  }).join('');
+}
+
+/* ---------------- 交互 ---------------- */
+window.addEventListener('resize', ()=>{ draw3D(); });
+(function(){
+  let drag=null; const c=document.getElementById('c3d');
+  c.addEventListener('mousedown',e=>{drag={x:e.clientX,y:e.clientY};e.preventDefault();});
+  window.addEventListener('mouseup',()=>drag=null);
+  window.addEventListener('mousemove',e=>{ if(!drag) return;
+    cam.yaw -= (e.clientX-drag.x)*0.008;
+    cam.pitch = Math.max(-1.45,Math.min(1.45,cam.pitch+(e.clientY-drag.y)*0.008));
+    drag={x:e.clientX,y:e.clientY}; draw3D(); });
+  c.addEventListener('wheel',e=>{ e.preventDefault();
+    cam.zoom=Math.max(.25,Math.min(6,cam.zoom*(e.deltaY>0?.92:1.08))); draw3D(); },{passive:false});
+})();
+document.getElementById('cbFrames').onchange = e => { SHOW_FRAMES = e.target.checked; draw3D(); };
+document.getElementById('selN').onchange = () => updateAll();
+document.getElementById('btnAdd').onclick  = () => openForm();
+document.getElementById('btnDemo').onclick = () => { if(confirm('载入示例模型？当前模型会被替换')) setModel(demoModel()); };
+document.getElementById('btnSave').onclick = () => {
+  const blob = new Blob([JSON.stringify(MODEL,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (MODEL.name||'arm').replace(/[\\/:*?"<>|]/g,'_') + '.json';
+  a.click();
+};
+document.getElementById('btnLoad').onclick = () => document.getElementById('fileIn').click();
+document.getElementById('fileIn').onchange = e => {
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload = () => { try{ setModel(JSON.parse(r.result)); }catch(err){ alert('文件解析失败：'+err.message); } };
+  r.readAsText(f,'utf-8'); e.target.value='';
+};
+/* 开始弹窗 */
+document.getElementById('mDemo').onclick = () => setModel(demoModel());
+document.getElementById('mLoad').onclick = () => document.getElementById('fileIn').click();
+document.getElementById('mLast').onclick = () => {
+  const m = loadLocal(); if(m) setModel(m); else alert('本地还没有保存过模型');
+};
+
+/* 自检钩子：#demo 直接载入示例；#dump 把浏览器算出来的各坐标系数据铺满屏幕（供无头截图核对） */
+window.addEventListener('DOMContentLoaded', () => {
+  loadCfg();                                 // ← 先恢复上次的设置（位置/映射/采样数）
+  const last = loadLocal();
+  document.getElementById('mLast').style.display = last ? '' : 'none';
+  const h = location.hash;
+  if(h.indexOf('demosave') >= 0){            // 载入示例并【存档】（等同于在弹窗里点"使用示例"）
+    setModel(demoModel());
+  } else if(h.indexOf('demo') >= 0 || h.indexOf('dump') >= 0 || h.indexOf('anim') >= 0){
+    setModel(demoModel(), false);            // 不改写本机保存的模型
+    if(h.indexOf('dump') >= 0) doDump();
+  } else if(last){
+    setModel(last);                          // ★ 有存档就直接进去，不再每次弹窗
+  }
+  syncCfgInputs();
+});
+function doDump(){
+  const F = fkAll(Q);
+  const lines = ['MODEL = ' + MODEL.name, 'q(deg) = ' + Q.join(', '), ''];
+  for(const f of F){
+    const ax = v => mulv(f.R, v).map(x => (x>=0?' ':'') + x.toFixed(5)).join('  ');
+    lines.push(f.name + '  (joint: ' + (f.joint||'-') + ')');
+    lines.push('  o = ' + f.t.map(x => (x>=0?' ':'') + x.toFixed(2)).join('  '));
+    lines.push('  X = ' + ax([1,0,0]));
+    lines.push('  Y = ' + ax([0,1,0]));
+    lines.push('  Z = ' + ax([0,0,1]));
+    lines.push('');
+  }
+  document.body.innerHTML = '<pre style="margin:0;padding:16px;background:#0f1420;color:#e6ecf7;'+
+    'font:15px/1.5 Consolas,monospace;white-space:pre">' + lines.join('\n') + '</pre>';
+}
+</script>
+
+<script>
+"use strict";
+/* ==================================================================
+   规则手册硬编码区（比赛规则若变，只改这一段）
+   表 5-10 科技核心位姿范围；坐标系 OXYZ 的原点 O 在【战场地面】上，
+   而机械臂 base 坐标系装在底盘上（z +170mm），换算时必须减掉。
+   ================================================================== */
+const RULES = {
+  src   : '规则手册 表5-10（x,y,z 单位 mm，角度 °）',
+  baseH : 170,            // 车停在 OXYZ：base 原点 = (0,0,170)_OXYZ，Z 方向相同
+  /* base 系与 OXYZ 的轴向映射（你给的）：
+       base.X = -OXYZ.Y      base.Y = +OXYZ.X      base.Z = +OXYZ.Z
+     （右手系自洽；即绕 OXYZ.Z 转 +90°） */
+  init  : {x:-500, y:-200, z:800, th:0, ph:90, al:0},   // 装配臂(科技核心)位置，OXYZ 下
+  levels: {
+    1: {name:'一级', x:[-100,0], y:[100,300], z:[500,700], th:[0,0],    ph:[90,90], al:[0,0],
+        note:'无平移、无旋转要求'},
+    2: {name:'二级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
+        note:'放入后沿 z 平移 100mm，无旋转要求'},
+    3: {name:'三级', x:[-100,0], y:[100,300], z:[500,700], th:[-90,90], ph:[0,90],  al:[-45,45],
+        note:'放入后沿 z 平移 100mm；再以 P 轴为旋转轴旋转'},
+  },
+  /* 装配动作约定（按你的口述写死）
+     - 夹爪是连杆机构：沿自身 x 轴移动夹紧
+     - 插入：沿 ±y 把 Q 轴送进科技核心口（初始位形 e⃗∥+X_OXYZ∥base.Y）
+     - 夹爪姿态：Q 轴正对着的是夹爪的 Z-，即 夹爪自身 z = -e⃗
+     - P 轴 = 核心坐标系的 Y′；Q 轴 = X′（= e⃗） */
+  act: {
+    gripAxis  : 'x',
+    insertAxis: 'y',
+    Qaxis     : 'X′ ( = e⃗ )',
+    Paxis     : 'Y′',
+    eeZalign  : '-e⃗',
+  }
+};
+
+/* ---------------- 小工具 ---------------- */
+let VOX = null;                                   // 可达集体素集合
+const rnd  = ([a,b]) => a + Math.random()*(b-a);
+const vkey = (p,vs) => Math.floor(p[0]/vs)+','+Math.floor(p[1]/vs)+','+Math.floor(p[2]/vs);
+const cross= (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const dot3 = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const unit = a => { const n=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/n,a[1]/n,a[2]/n]; };
+const mulS = (a,s) => [a[0]*s, a[1]*s, a[2]*s];
+function solve3(A,b){                              // 3x3 线性方程组
+  const d = det3(A); if(Math.abs(d) < 1e-12) return [0,0,0];
+  const col=[0,1,2].map(j=>{ const M=A.map(r=>r.slice()); for(let i=0;i<3;i++) M[i][j]=b[i];
+    return det3(M)/d; });
+  return col;
+}
+/* OXYZ（地面系） <-> base 系。两种映射可在界面上切换：
+   A(swap=true, 默认)：base.X = -OXYZ.X、base.Y = -OXYZ.Y、base.Z = OXYZ.Z-170
+        ⇒ 零点 e⃗(=+OXYZ.X) 映射到 base 的 -X。配 base yaw=-90（臂朝 +X）
+          正好让"臂朝 +X、Q 轴朝 -X"，互为反向 ⇒ 正面装配 ✓
+   B(swap=false)：base.X = -OXYZ.Y、base.Y = +OXYZ.X（右手系自洽，绕 Z +90°） */
+const MAP = { swap: true };
+const taskToBase = p => MAP.swap ? [-p[0], -p[1], p[2]-RULES.baseH]
+                                 : [-p[1],  p[0], p[2]-RULES.baseH];
+const baseToTask = p => MAP.swap ? [-p[0], -p[1], p[2]+RULES.baseH]
+                                 : [ p[1], -p[0], p[2]+RULES.baseH];
+const dirToBase  = d => MAP.swap ? [-d[0], -d[1], d[2]]
+                                 : [-d[1],  d[0], d[2]];
+
+/* ---------------- 科技核心位姿 → 空间姿态 ---------------- */
+/* e⃗（= 装配柱前表面法向 = Q 轴方向）由球坐标 (θ,φ) 给出，定义在 OXYZ 下；
+   α 为绕 e⃗ 的自转；(u,v,e) 构成前表面的正交基。
+   qfix = 三级末步"绕零点位形 Q 轴"的附加旋转（不是绕当前 e⃗）。 */
+function coreFrame(P){
+  const th=P.th*D2R, ph=P.ph*D2R, al=(P.al||0)*D2R;
+  let e = [Math.sin(ph)*Math.cos(th), Math.sin(ph)*Math.sin(th), Math.cos(ph)];
+  let u = unit(Math.abs(e[2])<0.9 ? cross([0,0,1],e) : cross([1,0,0],e));
+  let v = cross(e,u);
+  if(al){ const Ra=rotAxis(e,al); u=mulv(Ra,u); v=mulv(Ra,v); }
+  // 注意：qfix（绕零点位形 Q 轴转 90°）只作用在 Q 轴本身，【六边形不旋转】
+  return {e,u,v};
+}
+let CORE = null;      // ★ 六边形（核心本体）的位姿：放置好之后【固定不动】
+let QASM = null;      // ★ Q 轴组件：{ins 插入量, dz 抬升, dphi 绕P轴转角, qfix 绕base.Y转角}
+
+/* Q 轴组件的几何（全部在 base 系下）：
+     - 初始方向 = 核心的 e⃗（零点位形时 = -X_b）
+     - ④ 抬起：绕【base 的 +Y 轴】转 90° ⇒ Q 轴从水平转到 +Z（往上）✔
+     - ⑤ 末步：绕【base 的 X 轴】转 90°（不是再绕 Y 转 90°，那会变成绕 Y 180°）
+     - Q 轴组件原点固定在核心前表面中心 E：
+       插入是"能量单元沿 Q 轴滑进去"，不是核心在动 */
+function qasmGeom(P, A){
+  const F0 = coreFrame(P);
+  let e = dirToBase(F0.e), u = dirToBase(F0.u), v = dirToBase(F0.v);
+  const e0b = e.slice();                                   // 初始 Q 方向（插入沿它）
+  let R = rotAxis([0,1,0], (A.lift||0)*D2R);               // ④ 绕 base +Y 抬起
+  e = mulv(R,e); u = mulv(R,u); v = mulv(R,v);
+  R = rotAxis([1,0,0], (A.qfix||0)*D2R);                   // ⑤ 绕 base X 旋转
+  e = mulv(R,e); u = mulv(R,u); v = mulv(R,v);
+  const O = taskToBase([P.x,P.y,P.z]);                     // 固定不动
+  return {O, e, u, v, e0b};
+}
+
+function drawCoreOverlay(g,S,label){
+  if(!CORE) return;
+  const P=CORE, F0=coreFrame(P), Eb=taskToBase([P.x,P.y,P.z]);
+  const Fu=dirToBase(F0.u), Fv=dirToBase(F0.v), Fe=dirToBase(F0.e);
+  // ---- 六边形：固定不动 ----
+  const R=150, hex=[];
+  for(let k=0;k<6;k++){ const a=k*Math.PI/3;
+    hex.push(addv(addv(Eb, mulS(Fu,R*Math.cos(a))), mulS(Fv,R*Math.sin(a)))); }
+  g.strokeStyle='#8fd0ff'; g.lineWidth=2; g.beginPath();
+  hex.forEach((p,i)=>{const s=S(p); i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1]);});
+  g.closePath(); g.stroke();
+  g.globalAlpha=.12; g.fillStyle='#8fd0ff'; g.fill(); g.globalAlpha=1;
+  label('核心本体(固定)', S(hex[4])[0]-10, S(hex[4])[1]+16, '#8fd0ff',
+        "bold 11px system-ui,'Microsoft YaHei'");
+  // 前表面法向 e⃗（虚线参考）
+  const e1=S(addv(Eb, mulS(Fe,190)));
+  g.strokeStyle='rgba(143,208,255,.55)'; g.lineWidth=1.4; g.setLineDash([6,4]);
+  g.beginPath(); g.moveTo(S(Eb)[0],S(Eb)[1]); g.lineTo(e1[0],e1[1]); g.stroke(); g.setLineDash([]);
+  // P 轴（六边形顶部；Q 轴组件绕它抬起）
+  const top=addv(Eb, mulS(Fv,R)), p1=S(addv(top, mulS(Fu,80))), p2=S(addv(top, mulS(Fu,-80)));
+  g.strokeStyle='#e879f9'; g.lineWidth=3;
+  g.beginPath(); g.moveTo(p1[0],p1[1]); g.lineTo(p2[0],p2[1]); g.stroke();
+  label('P轴', p2[0]-30, p2[1]+14, '#e879f9', "bold 11px system-ui,'Microsoft YaHei'");
+  // ---- Q 轴组件：会动 ----
+  const A = QASM || {ins:0,dz:0,dphi:0,qfix:0};
+  const Q = qasmGeom(P, A);
+  const q0=S(Q.O), q1=S(addv(Q.O, mulS(Q.e,110)));
+  g.strokeStyle='#ffb454'; g.lineWidth=3;
+  g.beginPath(); g.moveTo(q0[0],q0[1]); g.lineTo(q1[0],q1[1]); g.stroke();
+  label('Q轴', q1[0]+5, q1[1]-5, '#ffb454', "bold 11px system-ui,'Microsoft YaHei'");
+  label('E', q0[0]+6, q0[1]+15, '#8fd0ff', "bold 12px system-ui,'Microsoft YaHei'");
+  // Q 轴方头（跟着 Q 轴一起走；qfix 时绕 base.Y 公转，所以整根轴会摆过去）
+  const base=addv(Q.O, mulS(Q.e,88));
+  const g1=S(addv(base, mulS(Q.u,24))), g2=S(addv(base, mulS(Q.u,-24)));
+  g.strokeStyle='#ffd9a0'; g.lineWidth=4;
+  g.beginPath(); g.moveTo(g1[0],g1[1]); g.lineTo(g2[0],g2[1]); g.stroke();
+  if(A.qfix) label('绕base.Y '+A.qfix.toFixed(0)+'°', q1[0]+6, q1[1]+16, '#ffd9a0',
+                   "bold 11px system-ui,'Microsoft YaHei'");
+}
+/* 每个关节"实际转了多少"：在关节原点画一段弧，从该关节为 0 时子体 x 轴的方向
+   转到当前 x 轴方向（绕关节轴），并标出角度 —— 一眼看出哪个 joint 在转 */
+function drawJointArcs(g, S, F, label){
+  let qi = 0;
+  for(let i=1;i<F.length;i++){
+    const c = CHAIN[i-1]; if(!c.movable){ continue; }
+    const q = Q[qi]||0; qi++;
+    const pj = F[i].t;
+    const axW = unit(mulv(F[i-1].R, c.axis));          // 关节轴（世界系）
+    const Rzero = mul3(F[i-1].R, c.Rf);                // 该关节为 0 时子体姿态
+    const x0 = mulv(Rzero, [1,0,0]), x1 = mulv(F[i].R, [1,0,0]);
+    const r0 = unit(subv(x0, mulS(axW, dot3(x0,axW))));
+    const r1 = unit(subv(x1, mulS(axW, dot3(x1,axW))));
+    let ang = Math.atan2(dot3(cross(r0,r1), axW), dot3(r0,r1));
+    if(!isFinite(ang)) continue;
+    if(Math.abs(ang) < 0.01){          // 角度≈0 也画一小段，避免"看不出有没有这个功能"
+      ang = (q >= 0 ? 1 : -1) * 0.18;
+    }
+    const zeroish = Math.abs(q) < 0.5;
+    const rad = 52, seg = Math.max(6, Math.round(Math.abs(ang)/0.15)), pts = [];
+    for(let k=0;k<=seg;k++){
+      const t = ang*k/seg;
+      const d = addv(mulS(r0, Math.cos(t)), mulS(cross(axW,r0), Math.sin(t)));
+      pts.push(S(addv(pj, mulS(d, rad))));
+    }
+    g.strokeStyle='#ffe066'; g.lineWidth=2.2;
+    g.beginPath(); pts.forEach((s,k)=> k? g.lineTo(s[0],s[1]) : g.moveTo(s[0],s[1])); g.stroke();
+    // 两条半径边
+    const pjS = S(pj);
+    g.strokeStyle='rgba(255,224,102,.5)'; g.lineWidth=1.2;
+    g.beginPath(); g.moveTo(pjS[0],pjS[1]); g.lineTo(pts[0][0],pts[0][1]);
+    g.moveTo(pjS[0],pjS[1]); g.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]); g.stroke();
+    const mid = pts[Math.floor(pts.length/2)];
+    label(c.joint+' '+q.toFixed(0)+'°'+(zeroish?' (0)':''), mid[0]+5, mid[1]-5,
+          zeroish ? '#8fa0bf' : '#ffe066', "bold 11px system-ui,'Microsoft YaHei'");
+  }
+}
+/* ---------------- 任务域数据（只针对三级；位置与难度等级无关） ---------------- */
+/* 体素邻域判定：可达集是随机采样出来的，空格子可能只是没采到，
+   所以查 ±1 邻域（27 格）任一命中即算可达，避免把真空隙误判成不可达 */
+function vkeyN(p, vs){
+  const i=Math.floor(p[0]/vs), j=Math.floor(p[1]/vs), k=Math.floor(p[2]/vs);
+  for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++) for(let c=-1;c<=1;c++)
+    if(VOX.has((i+a)+','+(j+b)+','+(k+c))) return true;
+  return false;
+}
+/* 多起点求解：返回误差最小的那个解
+   ★ 判据与面板一致：任一 ok 即 ok（否则"位置更准但姿态差"的解会盖住真 ok 解） */
+function bestOfSeeds(Eb, eB, q0, nSeed){
+  const lim = qLimits();
+  let best = null, okBest = null, bestSc = Infinity;
+  for(let s=0; s<nSeed; s++){
+    const seed = s===0 ? q0 : lim.map(([lo,hi]) => lo + Math.random()*(hi-lo));
+    const r = ikSolve6(Eb, mulS(eB,-1), seed, 200, 1);
+    if(r.ok && !okBest) okBest = r;
+    const sc = Math.hypot(r.e, W_ORI*(r.ang||0));
+    if(sc < bestSc){ bestSc = sc; best = r; }
+    if(okBest) break;
+  }
+  return okBest || best;
+}
+function analyzeTask(){
+  const el = document.getElementById('dataBody');
+  if(!MODEL){ el.textContent='载入模型后显示…'; return; }
+  if(!VOX || !VOX.size){ el.textContent='可达集为空'; return; }
+  const L = RULES.levels[3], vs = 50, N = 6000;
+  let hit=0, hit0=0; const zb=new Map(); const miss=[];
+  for(let i=0;i<N;i++){
+    const x=rnd(L.x), y=rnd(L.y), z=rnd(L.z);
+    const p=taskToBase([x,y,z]);
+    const ok = vkeyN(p,vs);
+    if(ok) hit++;
+    if(VOX.has(vkey(p,vs))) hit0++;
+    if(!ok && miss.length<400) miss.push(p);
+    const k=Math.floor(z/100)*100;
+    if(!zb.has(k)) zb.set(k,[0,0]);
+    const b=zb.get(k); b[0]++; if(ok) b[1]++;
+  }
+  // 不可达点到最近可达采样点的距离（中位数）
+  let med='-';
+  if(miss.length && CLOUD.length){
+    const ds=[];
+    for(const p of miss){ let m=Infinity;
+      for(const c of CLOUD){ const d=Math.hypot(c[0]-p[0],c[1]-p[1],c[2]-p[2]); if(d<m)m=d; }
+      ds.push(m); }
+    ds.sort((a,b)=>a-b); med = ds[Math.floor(ds.length/2)].toFixed(0)+' mm';
+  }
+  const pct = (a,b) => (100*a/b);
+  // ---- IK 复核（含姿态约束：插入时 夹爪 y ∥ Q 轴），这才是真正的可行性判定 ----
+  /* ★ 起点数 3 → 12：这份 IK 是数值求解器，单起点成功率只有 ~66%（见 README）。
+     实测（320 个三级任务域位姿）：3 起点 89%、8 起点 99%、12 起点 99.4%、16 起点 99.7%；
+     而"只解位置"和强多起点都是 100% —— 也就是说剩下的零星失败是求解器运气，不是几何不可达。
+     320 位姿 × 12 起点（命中即停）整段约 2 s，可以接受。 */
+  let ikOK = 0, ikN = 320, ikMiss = 0, ikBest = 0, ikPosOK = 0, ikOKplus = 0;
+  const IK_START = 12, IK_ITER = 300;
+  const ikErr = [];
+  const q0 = Q.slice();
+  for(let i=0;i<ikN;i++){
+    const P = {x:rnd(L.x), y:rnd(L.y), z:rnd(L.z), th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)};
+    const Eb = taskToBase([P.x,P.y,P.z]);
+    const eB = dirToBase(coreFrame(P).e);
+    // 对照：只解位置。★ 固定 3 起点、独立跑，不跟下面主循环的"命中即停"耦合
+    //   （耦合过：主循环一命中就 break，这个对照项就退化成"只有 1 次机会"，数字会莫名变低）
+    let posOnly = 0;
+    for(let s=0;s<3;s++){
+      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimits()[i];
+        return lim[0]+Math.random()*(lim[1]-lim[0]); });
+      if(ikPos(Eb, seed, 140).e < 5) posOnly++;
+    }
+    if(posOnly) ikPosOK++;
+    /* 主：多起点（零位 + 11 个随机种子），插入姿态 夹爪 y ∥ Q 轴。
+       ★ 挑解判据必须是"任一 ok 即 ok"：只按位置误差挑，会让"位置更准但姿态差"的解
+         盖住真正 ok 的解，凭空少算几个百分点（这个坑我踩过）。 */
+    let best = null, okBest = null, bestSc = Infinity;
+    for(let s=0;s<IK_START;s++){
+      const seed = s===0 ? q0 : q0.map((v,i)=>{ const lim=qLimits()[i];
+        return lim[0]+Math.random()*(lim[1]-lim[0]); });
+      const r = ikSolve6(Eb, mulS(eB,-1), seed, IK_ITER, 1);
+      if(r.ok && !okBest) okBest = r;
+      const sc = Math.hypot(r.e, W_ORI*(r.ang||0));            // 全失败时留真残差最小的那个做诊断
+      if(sc < bestSc){ bestSc = sc; best = r; }
+      if(okBest) break;
+    }
+    best = okBest || best;
+    if(ikSolve6(Eb, mulS(eB, +1), q0, IK_ITER, 1).ok) ikOKplus++;   // 夹爪 y = +e⃗（单起点对照）
+    ikErr.push(best.e);
+    if(best.ok) ikOK++;
+    else if(best.e > 40) ikMiss++;
+    if(best.e < 5) ikBest++;
+  }
+  ikErr.sort((a,b)=>a-b);
+  const ikMed = ikErr.length ? ikErr[Math.floor(ikErr.length/2)] : 0;
+  /* ---- 失败原因诊断：到底是"关节限位卡住"还是"真的够不到" ----
+     ① 统计失败位姿里最优解顶到限位的关节（顶死 = 放宽限位就能救）
+     ② 把限位整体放宽 ±25° 再解一遍，看可解率能涨到多少 */
+  let diagN = 0, diagSaved = 0;
+  const hitLim = new Array(NJ).fill(0);
+  const base = ikOK / ikN;
+  for(let i=0;i<140;i++){
+    const P = {x:rnd(L.x), y:rnd(L.y), z:rnd(L.z), th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)};
+    const Eb = taskToBase([P.x,P.y,P.z]), eB = dirToBase(coreFrame(P).e);
+    const r0 = bestOfSeeds(Eb, eB, q0, 3);
+    if(r0.ok) continue;
+    diagN++;
+    const lim0 = qLimits();
+    for(let k=0;k<NJ;k++){
+      const lo=lim0[k][0], hi=lim0[k][1];
+      if(Math.abs(r0.q[k]-lo) < 4 || Math.abs(r0.q[k]-hi) < 4) hitLim[k]++;
+    }
+    LIM_WIDEN = 25;                                  // 放宽限位再试
+    const r1 = bestOfSeeds(Eb, eB, q0, 3);
+    LIM_WIDEN = 0;
+    if(r1.ok) diagSaved++;
+  }
+  const limNames = CHAIN.filter(c=>c.movable).map(c=>c.joint);
+  const hitTxt = limNames.map((n,i)=> hitLim[i] ? (n+' '+Math.round(100*hitLim[i]/Math.max(diagN,1))+'%') : '')
+                        .filter(Boolean).join(' · ') || '无';
+  const widenRate = diagN ? (ikOK + diagSaved) / ikN : base;
+  /* ---- 安装朝向扫描：哪个 yaw 的可解率最高（这是提高可解率最有效的杠杆） ---- */
+  let scanBest = null, scanCurve = [];
+  if(MODEL){
+    const yaw0 = MODEL.base.yaw, NS = 60, poses = [];
+    for(let i=0;i<NS;i++) poses.push({x:rnd(L.x), y:rnd(L.y), z:rnd(L.z),
+                                      th:rnd(L.th), ph:rnd(L.ph), al:rnd(L.al)});
+    for(let y=-180; y<180; y+=45){
+      MODEL.base.yaw = y;
+      let ok = 0;
+      for(const P of poses){
+        const Eb = taskToBase([P.x,P.y,P.z]), eB = dirToBase(coreFrame(P).e);
+        if(bestOfSeeds(Eb, eB, q0, 2).ok) ok++;
+      }
+      scanCurve.push([y, ok/NS]);
+      if(!scanBest || ok/NS > scanBest[1]) scanBest = [y, ok/NS];
+    }
+    MODEL.base.yaw = yaw0;                      // 恢复原值
+  }
+  // ---- 零位朝向校核：末端(最后一个关节)的 z 轴 与 Q 轴正方向 e⃗ 的关系 ----
+  // 理想（正面装配）= 两者【相对】(≈180°)；若 ≈0° 说明同向，臂得先绕到反面去，
+  // 解算自然会出现"抽象行为"。可把臂的安装 yaw 改 180° 或改 RULES 里的映射来翻面。
+  const Fz = fkAll(new Array(NJ).fill(0));
+  const eeZ = Fz[Fz.length-1];
+  const zAx = [eeZ.R[0][2], eeZ.R[1][2], eeZ.R[2][2]];
+  const Ptyp = {x:L.x[0], y:(L.y[0]+L.y[1])/2, z:(L.z[0]+L.z[1])/2, th:0, ph:90, al:0};
+  const eTyp = dirToBase(coreFrame(Ptyp).e);
+  const cosZ = Math.max(-1, Math.min(1, dot3(zAx, eTyp)));
+  const angZ = Math.acos(cosZ)*180/Math.PI;
+  const facing = angZ > 135 ? '正对（正面装配 ✓）'
+               : (angZ < 45 ? '同向（需绕到反面 ✗）' : '斜交');
+  // ---- IK 最小自检：把"当前末端位置"偏移 20mm 当目标，IK 应当立刻收回 ----
+  const eeNow = fkAll(Q)[CHAIN.length].t;
+  const selfT = [eeNow[0]+20, eeNow[1], eeNow[2]];
+  const traj = [1,2,5,20,80,300].map(k => ikPos(selfT, Q.slice(), k).e.toFixed(1)).join(' → ');
+  // 诊断：雅可比各列模长（正常应是几百 mm 量级）
+  const Fd = fkAll(Q), ped = Fd[Fd.length-1].t, colMag = [];
+  for(let i=1;i<Fd.length;i++){ const f=Fd[i]; if(!f.movable) continue;
+    const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+    const a=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+    colMag.push(Math.hypot(...cross(a, subv(ped,f.t))).toFixed(0)); }
+  const jacInfo = '|J|列 = ' + colMag.join(', ');
+  const rrInfo = 'r模长 = ' + Fd.map((f,i)=> i? Math.hypot(...subv(ped,f.t)).toFixed(0):null).filter(Boolean).join(', ');
+  // 单步诊断：算一次 DLS，看 y 与 Δq 的实际量级
+  const e1 = subv(selfT, ped), J1 = [];
+  for(let i=1;i<Fd.length;i++){ const f=Fd[i]; if(!f.movable) continue;
+    const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+    const a=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+    J1.push(cross(a, subv(ped,f.t))); }
+  const A1=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){ let s=0; for(const jc of J1) s+=jc[i]*jc[j];
+    A1[i][j]=s+(i===j?40*40:0); }
+  const y1 = solveN(A1, e1);
+  const dq1 = J1.map(j => (j[0]*y1[0]+j[1]*y1[1]+j[2]*y1[2]));
+  const stepInfo = '单步：|e|=' + Math.hypot(...e1).toFixed(1) + ' |y|=' +
+      Math.hypot(...y1).toExponential(2) + ' Δq(rad)=' + dq1.map(v=>v.toExponential(2)).join(', ');
+  const selfR = ikPos(selfT, Q.slice(), 80);
+  const selfD = Math.hypot(...subv(selfT, fkAll(selfR.q)[CHAIN.length].t));
+  const selfA = ikSolve6(selfT, [0,0,1], Q.slice(), 120);
+  let rows='';
+  [...zb.keys()].sort((a,b)=>a-b).forEach(k=>{
+    const b=zb.get(k), r=pct(b[1],b[0]);
+    const cls = r>90?'good':(r<50?'bad':'');
+    rows += `<tr><td>z ${k}~${k+100}</td><td class="num">${b[0]}</td>
+             <td class="num ${cls}">${r.toFixed(1)}%</td></tr>`;
+  });
+  PANEL_REST = `
+    <div class="sect">任务域（硬编码 · 规则手册表5-10）</div>
+    <table><tr><th>难度</th><th>x</th><th>y</th><th>z</th><th>θ/φ/α</th></tr>
+      ${[1,2,3].map(i=>{const v=RULES.levels[i];
+        return `<tr><td>${v.name}</td><td>${v.x[0]}~${v.x[1]}</td><td>${v.y[0]}~${v.y[1]}</td>
+                <td>${v.z[0]}~${v.z[1]}</td>
+                <td>${v.th[0]}~${v.th[1]} / ${v.ph[0]}~${v.ph[1]} / ${v.al[0]}~${v.al[1]}</td></tr>`;}).join('')}
+    </table>
+    <div class="grid">
+      <span>底盘高度 ⇒ base 系 z</span><b>${RULES.baseH} ⇒ ${L.z[0]-RULES.baseH}~${L.z[1]-RULES.baseH}</b>
+      <span>装配臂位置 (OXYZ)</span><b>${RULES.init.x}, ${RULES.init.y}, ${RULES.init.z}</b>
+    </div>
+
+    <div class="sect">位置可达率（E 点落入可达集，与难度无关）</div>
+    <div class="grid">
+      <span>可达（含 ±1 体素容差）</span><b class="good">${pct(hit,N).toFixed(1)}%</b>
+      <span>严格同体素</span><b>${pct(hit0,N).toFixed(1)}%</b>
+      <span>不可达点最近可达距离中位</span><b>${med}</b>
+    </div>
+
+    <div class="sect">IK 复核（插入时 夹爪 y ∥ Q 轴）</div>
+    <div class="grid">
+      <span>可解（${ikN} 位姿 · ${IK_START} 起点）</span><b class="${ikOK/ikN>0.9?'good':'bad'}">${pct(ikOK,ikN).toFixed(1)}%</b>
+      <span>只解位置（对照）</span><b class="${ikPosOK/ikN>0.9?'good':'bad'}">${pct(ikPosOK,ikN).toFixed(1)}%</b>
+      <span>位置误差 &lt;5mm</span><b>${pct(ikBest,ikN).toFixed(1)}%</b>
+      <span>中位位置误差</span><b>${ikMed.toFixed(0)} mm</b>
+      <span>对齐取 +e⃗ 时（单起点）</span><b>${pct(ikOKplus,ikN).toFixed(1)}%</b>
+    </div>
+    <div style="color:#5d6b88;font-size:10.5px;margin-top:2px">
+      数值 IK（阻尼最小二乘 · 每个位姿最多 ${IK_START} 起点 / ${IK_ITER} 迭代，命中即停）：
+      <b>它是"能解出来"的下界，不是几何判据</b> —— 零星失败多为求解器运气，
+      与"只解位置"那一行的差距才是插入姿态造成的损失。几何结论看上面体素与"失败原因诊断"。
+    </div>
+
+    <div class="sect">失败原因诊断</div>
+    <div>顶到限位的关节：<b>${hitTxt}</b></div>
+    <div>把各关节限位整体放宽 ±25° 后再解：<b class="good">${pct(widenRate,1).toFixed(1)}%</b>
+         <span style="color:#5d6b88">（提升幅度 = 限位造成的损失）</span></div>
+    ${scanBest ? `<div>安装朝向扫描（当前 yaw ${MODEL?MODEL.base.yaw:0}°）：
+         最佳 <b class="good">yaw ${scanBest[0]}° ⇒ ${pct(scanBest[1],1).toFixed(1)}%</b></div>
+      <div style="color:#5d6b88;font-size:10.5px">${scanCurve.map(c=>c[0]+'°:'+Math.round(100*c[1])+'%').join('　')}</div>` : ''}
+
+    <div class="sect">零位朝向校核</div>
+    <div class="grid">
+      <span>末端 z vs Q 轴 e⃗</span>
+          <b class="${angZ>135?'good':'bad'}">${angZ.toFixed(1)}° ${facing}</b>
+    </div>
+
+    <div class="one" style="margin-top:10px;color:#5d6b88">
+      说明与用法见 README.md</div>`;
+  el.innerHTML = (typeof sizePanelHTML === 'function' ? sizePanelHTML() : '') + PANEL_REST;
+}
+
+/* ---------------- 数值 IK（阻尼最小二乘：位置 + 末端 z 轴对齐） ----------------
+   姿态约束来自你的要求：Q 轴正对着的是夹爪的 Z−，即【夹爪自身 z = -e⃗】   */
+function solveN(A, b){
+  const n=b.length, M=A.map((r,i)=>r.concat([b[i]]));
+  for(let c=0;c<n;c++){
+    let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+    if(Math.abs(M[p][c])<1e-12) return new Array(n).fill(0);
+    const t=M[c]; M[c]=M[p]; M[p]=t;
+    for(let r=0;r<n;r++){ if(r===c) continue;
+      const f=M[r][c]/M[c][c];
+      for(let k=c;k<=n;k++) M[r][k]-=f*M[c][k];
+    }
+  }
+  return M.map((r,i)=> r[i] ? r[n]/r[i] : 0);
+}
+const W_ORI = 40;                     // 姿态误差权重（mm per rad）
+function ikPos(target, q0, iters){    // 阶段一：只解位置（先拿到一个能到的种子）
+  let q=q0.slice(), lam=40; const lim=qLimits();
+  for(let it=0; it<iters; it++){
+    const F=fkAll(q), pe=F[F.length-1].t;
+    const ep=subv(target,pe);
+    if(Math.hypot(ep[0],ep[1],ep[2])<0.5) break;
+    const J=[];
+    for(let i=1;i<F.length;i++){ const f=F[i]; if(!f.movable) continue;
+      const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+      const a=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+      J.push(cross(a, subv(pe,f.t))); }
+    const A=[[0,0,0],[0,0,0],[0,0,0]];
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++){ let s=0; for(const jc of J) s+=jc[i]*jc[j];
+      A[i][j]=s+(i===j?lam*lam:0); }
+    const y=solveN(A,ep);
+    for(let k=0;k<J.length;k++){ let d=0; for(let i=0;i<3;i++) d+=J[k][i]*y[i];
+      // ★ d 是【弧度】，而 q/限位全是【角度】——必须 /D2R 换算，
+      //   否则步长小 57.3 倍（曾导致 IK 收敛极慢、被误判成"不可达"）
+      d = Math.max(-0.3, Math.min(0.3, d)) / D2R;
+      q[k]=Math.min(Math.max(q[k]+d,lim[k][0]),lim[k][1]); }
+    lam*=0.98;
+  }
+  const F=fkAll(q); const e=Math.hypot(...subv(target,F[F.length-1].t));
+  return {q, ok:e<1.5, e};
+}
+function ikSolve6(targetP, targetZdir, q0, iters, axIdx){
+  const ai = (axIdx === undefined) ? 2 : axIdx;   // 对齐轴：2 = 夹爪 z，1 = 夹爪 y
+  const seed = ikPos(targetP, q0, 90);          // 先位置后姿态，避免 180° 姿态误差一开始就压垮位置项
+  let q = seed.q.slice(), lam = 40;
+  const lim = qLimits(), tz = unit(targetZdir);
+  /* ★ 保留历史最优。这一步不是可有可无：迭代是欠阻尼的（λ 从 40 单调衰减到 ~2，
+     没有"这一步是否真的变好"的接受判据），最后一步经常比过程中到过的最好点更差。
+     判据用 F = ‖[位置误差 ; W_ORI·姿态轴角误差]‖ —— 与 DLS 真正在最小化的量一致。 */
+  let bestQ = q.slice(), bestF = Infinity, bestE = Infinity, bestA = 0;
+  for(let it=0; it<(iters||200); it++){
+    const F = fkAll(q), ee = F[F.length-1];
+    const ep = subv(targetP, ee.t);
+    const zc = [ee.R[0][ai], ee.R[1][ai], ee.R[2][ai]];    // 末端指定轴（世界系）
+    // 轴角姿态误差：叉乘在小角度下够用，但 zc 与目标反平行时叉乘=0、梯度消失（奇点）
+    const ax = cross(zc, tz), s = Math.hypot(ax[0],ax[1],ax[2]);
+    const c = zc[0]*tz[0]+zc[1]*tz[1]+zc[2]*tz[2];
+    let eo, ang;
+    if(s < 1e-8){
+      if(c > 0){ eo=[0,0,0]; ang=0; }
+      else { let p = Math.abs(zc[0])<0.9 ? cross(zc,[1,0,0]) : cross(zc,[0,1,0]);
+             eo = mulS(unit(p), Math.PI*W_ORI); ang = Math.PI; }
+    } else { ang = Math.atan2(s,c); eo = mulS(mulS(ax,1/s), ang*W_ORI); }
+    const dp = Math.hypot(ep[0],ep[1],ep[2]);
+    const rr = Math.hypot(dp, W_ORI*ang);
+    if(rr < bestF){ bestF = rr; bestQ = q.slice(); bestE = dp; bestA = ang; }
+    if(dp < 2 && ang < 0.15) return {q, ok:true, e:dp, ang};
+    /* ★ 姿态度量全程给足权重（原先是"远 0.02 / 中 0.25 / 近了才 1"的门控）。
+       门控会在迭代中途换掉目标函数、且**在远/中/近三档之间跳变**，是收敛后期来回震荡的主因。
+       实测（320 个三级任务域位姿，"任一起点 ok 即 ok"）：3 起点 82.5% → 90.6%，
+       12 起点 99.1% → 99.4%，24 起点 99.7% → 100.0%。
+       ⚠ 量这个改动时，挑"最优起点"的判据必须和 ok 判据一致（任一 ok 即 ok）：
+         若按"位置误差最小"挑，会把"位置更准但姿态差"的解盖在真 ok 解上面，凭空量出 5~8% 的假失败。 */
+    const wO = 1;
+    const eoW = mulS(eo, wO);
+    const J = [];
+    for(let i=1;i<F.length;i++){
+      const f=F[i]; if(!f.movable) continue;
+      const nn=Math.hypot(f.axis[0],f.axis[1],f.axis[2]);
+      const a=mulv(f.R,[f.axis[0]/nn,f.axis[1]/nn,f.axis[2]/nn]);
+      J.push(cross(a, subv(ee.t,f.t)).concat(mulS(a, W_ORI*wO)));
+    }
+    const A=[]; for(let i=0;i<6;i++) A.push([0,0,0,0,0,0]);
+    for(let i=0;i<6;i++)for(let j=0;j<6;j++){ let s2=0; for(const jc of J) s2+=jc[i]*jc[j];
+      A[i][j]=s2+(i===j?lam*lam:0); }
+    const y = solveN(A, ep.concat(eoW));
+    for(let k=0;k<J.length;k++){ let d=0; for(let i=0;i<6;i++) d+=J[k][i]*y[i];
+      d = Math.max(-0.2, Math.min(0.2, d)) / D2R;          // ★ 弧度 → 角度（同 ikPos）
+      q[k]=Math.min(Math.max(q[k]+d,lim[k][0]),lim[k][1]); }
+    lam *= 0.985;
+  }
+  /* ★ 用历史最优判定，而不是最后一次迭代 */
+  const F=fkAll(bestQ), ee=F[F.length-1];
+  const zc=[ee.R[0][ai],ee.R[1][ai],ee.R[2][ai]];
+  const angOff = Math.acos(Math.max(-1,Math.min(1, zc[0]*tz[0]+zc[1]*tz[1]+zc[2]*tz[2])));
+  const dp = Math.hypot(...subv(targetP, ee.t));
+  return {q:bestQ, ok: dp<3 && angOff<0.2, e:dp, ang:angOff, bestE:bestE, bestA:bestA};
+}
+
+/* ---------------- 示例装配动画（三级任务） ----------------
+   序列（按你的口述）：① 臂移动到 E（真动画：目标从当前末端平滑移过去）
+                     ② 沿 Q 轴方向插入（EE 沿 e⃗ 逼近 E）
+                     ③ 放入后【沿 z 平移 100mm】（核心与臂一起上升）
+                     ④ 以【P 轴 = 核心 Y′】为旋转轴抬起（φ 90°→0°）
+                     ⑤ 绕【零点位形的 Q 轴】转 90°                            */
+let ANIM = null;
+const lerp = (a,b,t) => a+(b-a)*t;
+const ease = t => t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+function animSteps(){
+  const I = RULES.init;
+  const K0 = {x:I.x, y:I.y, z:I.z, th:I.th, ph:I.ph, al:I.al};  // ★ 核心本体放置位姿：全场不动
+  const A0 = {ins:0, dz:0, lift:0, qfix:0};
+  const A  = o => Object.assign({}, A0, o);
+  return [
+    {d:3200, msg:'① 就位：臂移到 Q 轴前端外侧（夹爪 y 对准 Q 轴）',
+     core:K0, a:A(), b:A(), fromHome:true},
+    {d:2200, msg:'② 插入：从 Q 轴【前端】沿 Q 轴推进到末端（核心端面）',
+     core:K0, a:A(), b:A({ins:1})},
+    {d:2000, msg:'③ 放入后沿 z 平移 100mm',
+     core:K0, a:A({ins:1}), b:A({ins:1, dz:100})},
+    {d:2600, msg:'④ 抬起：绕【base 的 Y 轴】往上 90°（Q 轴转到 +Z）',
+     core:K0, a:A({ins:1, dz:100}), b:A({ins:1, dz:100, lift:90})},
+    {d:2600, msg:'⑤ 末步：绕【base 的 X 轴】旋转 90°',
+     core:K0, a:A({ins:1, dz:100, lift:90}), b:A({ins:1, dz:100, lift:90, qfix:90})},
+    {d:1200, msg:'⑥ 完成（六边形全程不动）', hold:true,
+     core:K0, a:A({ins:1, dz:100, lift:90, qfix:90}), b:A({ins:1, dz:100, lift:90, qfix:90})}
+  ];
+}
+function startAnim(){
+  if(!MODEL) return;
+  const F = fkAll(Q);
+  ANIM = {steps: animSteps(), i:0, t0: performance.now(),
+          eeStart: F[F.length-1].t.slice(), seed: Q.slice()};
+  document.getElementById('btnAnim').textContent = '■ 停止动画';
+  requestAnimationFrame(animTick);
+}
+function stopAnim(){
+  ANIM = null; CORE = null; QASM = null;
+  document.getElementById('btnAnim').textContent = '▶ 示例装配动画';
+  const m=document.getElementById('animMsg'); if(m) m.textContent='';
+  draw3D();
+}
+function asmAt(st, t){
+  const A = {};
+  for(const k of ['ins','dz','lift','qfix']) A[k] = lerp(st.a[k]||0, st.b[k]||0, t);
+  return A;
+}
+function animTick(now){
+  if(!ANIM) return;
+  let el = now - ANIM.t0;
+  let st = ANIM.steps[ANIM.i];
+  while(el > st.d && ANIM.i < ANIM.steps.length-1){
+    el -= st.d; ANIM.i++; st = ANIM.steps[ANIM.i];
+    if(st.fromHome) ANIM.eeStart = fkAll(Q)[CHAIN.length].t.slice();
+  }
+  // ★ 最后一步跑完就干净收尾（否则停在末态，看起来像"卡住"）
+  if(ANIM.i === ANIM.steps.length-1 && el > st.d){
+    const m = document.getElementById('animMsg');
+    if(m) m.innerHTML = st.msg + '　—— 动画结束，点按钮可重播';
+    ANIM = null;
+    document.getElementById('btnAnim').textContent = '↻ 重播装配动画';
+    draw3D(); drawList();
+    return;
+  }
+  const t = st.hold ? 1 : ease(Math.min(1, el/st.d));
+  CORE = st.core;                                  // 核心本体：不动
+  QASM = asmAt(st, t);                             // Q 轴组件：动
+  const G = qasmGeom(CORE, QASM);
+  // 末端目标：② 从 Q 轴【前端外侧】沿 Q 轴进到端面（t=0 在外侧 ins 处 → t=1 到位）；
+  //           ③ 之后跟着 z 平移一起升起
+  const insLen = 220, standoff = 40;   // 插入行程 220mm；夹爪停在离 Q 末端 40mm 处
+  const seat = addv(taskToBase([CORE.x,CORE.y,CORE.z]), [0,0,QASM.dz||0]);
+  let tgt = addv(seat, mulS(G.e0b, standoff + (1 - (QASM.ins||0)) * insLen));
+  if(st.fromHome){                                 // ① 从"当前末端"平滑移过去
+    tgt = [lerp(ANIM.eeStart[0],tgt[0],t), lerp(ANIM.eeStart[1],tgt[1],t),
+           lerp(ANIM.eeStart[2],tgt[2],t)];
+  }
+  const dir = mulS(G.e0b,-1);
+  let r = ikSolve6(tgt, dir, ANIM.seed, 320, 1);            // 夹爪 y ∥ Q 轴
+  for(let tries=0; !r.ok && r.e > 8 && tries < 2; tries++){  // 卡住就换种子再试两次
+    const lim = qLimits();
+    const seed2 = lim.map(([lo,hi]) => lo + Math.random()*(hi-lo));
+    const r2 = ikSolve6(tgt, dir, seed2, 320, 1);
+    if(r2.e < r.e) r = r2;
+  }
+  // ★ 不管收没收敛都用这个解，否则 IK 一失败臂就冻住（"动两下卡住"的根因）
+  if(r.q && r.q.length === NJ) Q = r.q;
+  ANIM.seed = Q.slice();
+  CURVEPTS = fkAll(Q);
+  const el2 = document.getElementById('animMsg');
+  if(el2){
+    const qTxt = CHAIN.filter(c=>c.movable).map((c,i)=>c.joint+' '+Q[i].toFixed(1)+'°').join('　');
+    el2.innerHTML = st.msg + (r.ok?'':'　<span style="color:#ffb454">⚠ IK 差 '+r.e.toFixed(0)+' mm</span>') +
+                    '<br><span style="color:#8fa0bf">关节角：'+qTxt+'</span>';
+  }
+  draw3D(); drawList();
+  ANIM.t0 = now - el;
+  requestAnimationFrame(animTick);
+}
+document.getElementById('btnAnim').onclick = () => { ANIM ? stopAnim() : startAnim(); };
+/* #anim：自动播放（便于无头截取动画各阶段） */
+window.addEventListener('DOMContentLoaded', () => {
+  if(location.hash.indexOf('anim') >= 0) setTimeout(() => { if(MODEL) startAnim(); }, 400);
+});
+
+/* ---------------- 让每次模型更新后刷新数据面板 ---------------- */
+const _updateAll = updateAll;
+updateAll = function(){
+  _updateAll(); analyzeTask();
+  const y = document.getElementById('inYaw');
+  if(y && MODEL) y.value = MODEL.base.yaw;
+};
+/* 安装 yaw：直接改臂的安装朝向（模型链里 base 的朝向） */
+document.getElementById('inYaw').onchange = e => {
+  if(!MODEL) return;
+  MODEL.base.yaw = +e.target.value || 0;
+  updateAll(); saveLocal();
+};
+/* 装配臂位置：OXYZ 下，直接改就重算并记住 */
+['inCx','inCy','inCz'].forEach(id => {
+  document.getElementById(id).onchange = () => {
+    RULES.init.x = +document.getElementById('inCx').value || 0;
+    RULES.init.y = +document.getElementById('inCy').value || 0;
+    RULES.init.z = +document.getElementById('inCz').value || 0;
+    if(CORE){ CORE.x = RULES.init.x; CORE.y = RULES.init.y; CORE.z = RULES.init.z; }
+    updateAll(); saveLocal();
+  };
+});
+/* 映射切换：核心在"前方"还是"侧面" */
+document.getElementById('selMap').onchange = e => {
+  MAP.swap = (e.target.value === 'swap');
+  updateAll(); saveLocal();
+};
+/* 若用户从开始窗口选了"示例"，把规则侧设置也存下来（但不覆盖已有模型） */
+document.getElementById('mDemo').addEventListener('click', () => {
+  setTimeout(() => { try{ localStorage.setItem('armBuilderCfg', JSON.stringify(cfgObj())); }
+                     catch(e){ warnNoLS(); } }, 0);
+});
+</script>
+
+<script>
+"use strict";
+/* ==================================================================
+   底盘碰撞箱 + 伸展尺寸校核（只做【显示】与【尺寸校核】，不参与任何运动学）
+   ------------------------------------------------------------------
+   ① 底盘中心点：由 base 系决定（可切"相对整机原点"），默认 base 下 (0, 140, 0)
+   ② 碰撞箱：x/y 以中心点为中心、z 从中心点沿【−Z】延伸 size_z
+      ⇒ 中心点 = 箱体【上表面中心】，箱体 580(x) × 580(y) × 105(z)
+      ⇒ 接地中心 = 箱体【底面中心】= 中心点 + (0,0,−105) = base (0,140,−105)
+   ③ 伸展尺寸（规则）：
+      · 长宽高 ≤ 1200 × 1200 × 1100
+      · 直径 1500 的球：机器人放在一个与地面平行、距球心 480 的平面上，
+        在该平面上的任意变形/移动不得超出此球
+      ⇒ 球心 = 接地中心沿地面法向(+Z)抬 480，半径 750
+      ⇒ 球与放置平面交线半径 = √(750²−480²) ≈ 576.3（地面上真正卡人的那个圈）
+   ④ 另外只报一个【机械臂长度】（各段杆长之和 + 采样估的最大伸展）。
+      ★ 刻意【不】报"当前位形/可达集的长宽高包围盒"：模型里没有杆件的碰撞体，
+        而且臂的 yaw 限位还没加（模型上能转到车背面），拿骨架去量长宽高只会得出假数。
+   ================================================================== */
+const CHASSIS_V   = 2;                 // ★ 改动 CHASSIS 默认值时必须 +1，
+                                       //   否则老存档（localStorage）会把新默认值盖回去
+const CHASSIS_DEF = { posMode:'base', pos:[0,140,0], size:[580,580,105], zDir:-1 };
+const SIZER_DEF   = { lwh:[1200,1200,1100], ballD:1500, ballH:480 };
+const C_CHASSIS = '#ffd400', C_LWH = '#00e5c0', C_BALL = '#a78bfa';
+const F_SM = "11px system-ui,'Microsoft YaHei'";
+const F_BD = "bold 11px system-ui,'Microsoft YaHei'";
+
+/* ---------------- 几何：全部换算到【整机原点系】 ---------------- */
+function chassisGeom(){
+  if(!MODEL) return null;
+  const Rb = rotZdeg(MODEL.base.yaw), tb = MODEL.base.xyz;
+  /* 底盘中心点：相对 base 系 ⇒ 先按 base 的 yaw 转，再平移到整机系 */
+  const C = (CHASSIS.posMode === 'base')
+          ? addv(mulv(Rb, CHASSIS.pos.slice()), tb)
+          : [+CHASSIS.pos[0]||0, +CHASSIS.pos[1]||0, +CHASSIS.pos[2]||0];
+  const nz = v => { const a = Math.abs(+v); return a > 1e-6 ? a : 1e-6; };
+  const sx = nz(CHASSIS.size[0]), sy = nz(CHASSIS.size[1]), sz = nz(CHASSIS.size[2]);
+  const down = (CHASSIS.zDir < 0);
+  const zTop = down ? C[2] : C[2] + sz;
+  const zBot = down ? C[2] - sz : C[2];
+  const bx = [C[0], C[1], (zTop + zBot)/2];          // 箱体几何中心
+  const bh = [sx/2, sy/2, (zTop - zBot)/2];          // 三个半长
+  const GC = [C[0], C[1], zBot];                     // 接地中心 = 箱体底面中心
+  const SR = nz(SIZER.ballD)/2;
+  const ballH = +SIZER.ballH || 0;
+  const SC = [GC[0], GC[1], GC[2] + ballH];          // 球心：接地中心沿 +Z 抬 ballH
+  const lh = SIZER.lwh.map(v => nz(v)/2);
+  const LC = [GC[0], GC[1], GC[2] + lh[2]];          // 长宽高框：xy 以接地中心为中心，z 从地面往上
+  const planeR = (SR > Math.abs(ballH)) ? Math.sqrt(SR*SR - ballH*ballH) : 0;
+  return {C, bx, bh, GC, SC, SR, ballH, LC, lh, Rb, planeR, zTop, zBot};
+}
+/* 盒子的 8 个角（i 的 bit2/1/0 = x/y/z 的正负）与 6 个面（顺时针环） */
+function boxCorners(c, h, R){
+  const out = [];
+  for(let i=0;i<8;i++){
+    const s = [(i&4)?1:-1, (i&2)?1:-1, (i&1)?1:-1];
+    out.push(addv(c, mulv(R, [s[0]*h[0], s[1]*h[1], s[2]*h[2]])));
+  }
+  return out;
+}
+const BOX_FACES = [[0,2,6,4],[1,5,7,3],[0,4,5,1],[2,3,7,6],[0,1,3,2],[4,6,7,5]];
+const BOX_EDGES = (()=>{ const E=[]; for(let i=0;i<8;i++) for(let j=i+1;j<8;j++){
+  const d=i^j; if(d===1||d===2||d===4) E.push([i,j]); } return E; })();
+
+/* ---------------- 画：线框盒 ---------------- */
+function drawBoxFrame(g, S, c, h, R, color, lw, dash, fillA){
+  const P = boxCorners(c, h, R).map(S);
+  g.save();
+  if(fillA){
+    g.globalAlpha = fillA; g.fillStyle = color;
+    for(const f of BOX_FACES){
+      g.beginPath();
+      f.forEach((k,i)=> i ? g.lineTo(P[k][0],P[k][1]) : g.moveTo(P[k][0],P[k][1]));
+      g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+  g.strokeStyle = color; g.lineWidth = lw || 1.6;
+  if(dash) g.setLineDash(dash);
+  g.beginPath();
+  for(const [i,j] of BOX_EDGES){ g.moveTo(P[i][0],P[i][1]); g.lineTo(P[j][0],P[j][1]); }
+  g.stroke();
+  g.restore();
+  return P;
+}
+
+/* ---------------- 画：底盘箱 / 长宽高框 / 限制球（在点云下层） ---------------- */
+function drawSizeOverlay(g, S, label){
+  const G = chassisGeom(); if(!G) return;
+  const zc = G.GC[2];
+
+  /* ---- ① 放置平面（过接地中心、平行地面）+ 球与它的交线 ---- */
+  const sq = Math.max(G.SR*1.5, G.lh[0]*1.1);
+  g.save();
+  g.strokeStyle = 'rgba(167,139,250,.28)'; g.lineWidth = 1; g.setLineDash([4,6]);
+  const c1=S([G.GC[0]-sq,G.GC[1]-sq,zc]), c2=S([G.GC[0]+sq,G.GC[1]-sq,zc]),
+        c3=S([G.GC[0]+sq,G.GC[1]+sq,zc]), c4=S([G.GC[0]-sq,G.GC[1]+sq,zc]);
+  g.beginPath(); g.moveTo(c1[0],c1[1]); g.lineTo(c2[0],c2[1]);
+  g.lineTo(c3[0],c3[1]); g.lineTo(c4[0],c4[1]); g.closePath(); g.stroke();
+  g.restore();
+  if(SHOWBOX.ball && G.planeR > 1){
+    const pts=[];
+    for(let a=0;a<=72;a++){ const t = a*2*Math.PI/72;
+      pts.push(S([G.GC[0]+G.planeR*Math.cos(t), G.GC[1]+G.planeR*Math.sin(t), zc])); }
+    g.save();
+    g.strokeStyle = 'rgba(167,139,250,.9)'; g.lineWidth = 1.6; g.setLineDash([7,5]);
+    g.beginPath(); pts.forEach((p,i)=> i ? g.lineTo(p[0],p[1]) : g.moveTo(p[0],p[1])); g.stroke();
+    g.restore();
+    label('地面上限圈 R='+G.planeR.toFixed(0), pts[0][0]+6, pts[0][1]+15,
+          'rgba(190,170,255,.95)', F_SM);
+  }
+
+  /* ---- ② 限制球 ⌀1500：球心 = 接地中心 + 480 ---- */
+  if(SHOWBOX.ball){
+    g.save();
+    g.globalAlpha = .3; g.strokeStyle = C_BALL; g.lineWidth = 1;
+    for(let k=1;k<=5;k++){                                   // 纬线
+      const ph = Math.PI*k/6, r = G.SR*Math.sin(ph), dz = G.SR*Math.cos(ph), pts=[];
+      for(let a=0;a<=48;a++){ const t = a*Math.PI/24;
+        pts.push(S([G.SC[0]+r*Math.cos(t), G.SC[1]+r*Math.sin(t), G.SC[2]+dz])); }
+      g.beginPath(); pts.forEach((p,i)=> i ? g.lineTo(p[0],p[1]) : g.moveTo(p[0],p[1])); g.stroke();
+    }
+    for(let k=0;k<6;k++){                                    // 经线
+      const th = Math.PI*k/6, ct = Math.cos(th), st = Math.sin(th), pts=[];
+      for(let a=0;a<=48;a++){ const t = a*Math.PI/24, sr = G.SR*Math.sin(t);
+        pts.push(S([G.SC[0]+sr*ct, G.SC[1]+sr*st, G.SC[2]+G.SR*Math.cos(t)])); }
+      g.beginPath(); pts.forEach((p,i)=> i ? g.lineTo(p[0],p[1]) : g.moveTo(p[0],p[1])); g.stroke();
+    }
+    /* 正交投影下球的轮廓就是屏幕上的圆（proj 是纯旋转，保长），半径 = 屏幕距离 */
+    const p0 = S(G.SC), p1 = S([G.SC[0]+G.SR, G.SC[1], G.SC[2]]);
+    const rp = Math.hypot(p1[0]-p0[0], p1[1]-p0[1]);
+    g.globalAlpha = .85; g.lineWidth = 1.8;
+    g.beginPath(); g.arc(p0[0], p0[1], rp, 0, 6.2832); g.stroke();
+    g.restore();
+    label('限制球 ⌀'+(2*G.SR).toFixed(0)+'  R='+G.SR.toFixed(0),
+          p0[0]+rp*0.70, p0[1]-rp*0.70, C_BALL, F_BD);
+    /* 球心 → 接地中心 的 480 */
+    const sg0 = S(G.GC);
+    g.save();
+    g.strokeStyle = 'rgba(167,139,250,.9)'; g.lineWidth = 1.4; g.setLineDash([4,3]);
+    g.beginPath(); g.moveTo(p0[0],p0[1]); g.lineTo(sg0[0],sg0[1]); g.stroke();
+    g.restore();
+    label('球心距接地中心 '+G.ballH.toFixed(0), (p0[0]+sg0[0])/2+7, (p0[1]+sg0[1])/2,
+          'rgba(190,170,255,.95)', F_SM);
+    g.fillStyle = C_BALL; g.beginPath(); g.arc(p0[0],p0[1],3.4,0,6.2832); g.fill();
+    label('球心', p0[0]+6, p0[1]-6, C_BALL, F_SM);
+  }
+
+  /* ---- ③ 长宽高框 1200 × 1200 × 1100 ---- */
+  if(SHOWBOX.lwh){
+    drawBoxFrame(g, S, G.LC, G.lh, G.Rb, C_LWH, 1.8, [9,5], 0.035);
+    const t = S([G.LC[0], G.LC[1], G.LC[2]+G.lh[2]-2]);
+    label('长宽高 '+SIZER.lwh.join('×')+'（地面起算）', t[0]+8, t[1]-8, C_LWH, F_BD);
+  }
+
+  /* ---- ④ 底盘碰撞箱（黄框）---- */
+  if(SHOWBOX.chassis){
+    drawBoxFrame(g, S, G.bx, G.bh, G.Rb, C_CHASSIS, 2.4, null, 0.075);
+    /* 底面四边（= 接地中心所在的面）单独描粗 */
+    const P = boxCorners(G.bx, G.bh, G.Rb).map(S);
+    g.save(); g.strokeStyle = C_CHASSIS; g.lineWidth = 3.4; g.beginPath();
+    const f = BOX_FACES[4];
+    for(let k=0;k<4;k++){ const a=P[f[k]], b=P[f[(k+1)%4]];
+      g.moveTo(a[0],a[1]); g.lineTo(b[0],b[1]); }
+    g.stroke(); g.restore();
+    /* 标签挂在【底面右下角】——底盘上表面中心正好是臂的 base，那里已经挤满了坐标系名 */
+    let bi = f[0], bs = -Infinity;
+    for(const k of f){ const sc = P[k][0] + P[k][1]*0.6; if(sc > bs){ bs = sc; bi = k; } }
+    label('底盘碰撞箱 '+CHASSIS.size.join('×'), P[bi][0]+6, P[bi][1]+18, C_CHASSIS, F_BD);
+  }
+
+  /* ---- ⑤ 两个关键点：底盘中心点 / 接地中心 ---- */
+  const pc = S(G.C), pg = S(G.GC);
+  g.save();
+  if(SHOWBOX.chassis){
+    g.fillStyle = C_CHASSIS; g.beginPath(); g.arc(pc[0],pc[1],4,0,6.2832); g.fill();
+    g.strokeStyle = C_CHASSIS; g.lineWidth = 2;
+    g.beginPath(); g.arc(pg[0],pg[1],7,0,6.2832); g.stroke();
+    g.beginPath();
+    g.moveTo(pg[0]-12,pg[1]); g.lineTo(pg[0]-4,pg[1]);
+    g.moveTo(pg[0]+4,pg[1]);  g.lineTo(pg[0]+12,pg[1]);
+    g.moveTo(pg[0],pg[1]-12); g.lineTo(pg[0],pg[1]-4);
+    g.moveTo(pg[0],pg[1]+4);  g.lineTo(pg[0],pg[1]+12);
+    g.stroke();
+  }
+  g.restore();
+  if(SHOWBOX.chassis){
+    /* 底盘中心点的标签【右对齐】放在点的左边：那一点周围全是臂的坐标系名，往右放必然打架 */
+    const txt = '底盘中心 base(' + CHASSIS.pos.join(', ') + ')';
+    g.font = F_BD;
+    const tw = g.measureText ? g.measureText(txt).width : txt.length*7;
+    label(txt, pc[0]-tw-8, pc[1]-7, C_CHASSIS, F_BD);
+    label('接地中心', pg[0]+10, pg[1]+17, C_CHASSIS, F_BD);
+  }
+}
+
+/* ---- 超出限制球的采样点【不画】 ----
+   曾经画过红点，删掉了。原因：采出来的"超球"点里有**一大片在接地中心 z 以下**，
+   也就是机械臂**穿透到地面以下**去了——限位没管地面，那种点根本不是真的超出，
+   画出来只会让人以为臂真的伸到球外面了（见 README 第 5 节第 8 条）。 */
+
+/* ---------------- 校核：底盘箱的范围 + 机械臂长度 ---------------- */
+/* ★ 底盘箱是【跟着车转】的（= 整机系绕 Z 转 base.yaw），所以整机系下的
+     轴向范围必须由 8 个角算，不能拿"中心±半长"直接加减（方箱子看不出来，长方形就会错） */
+function boxRange(G){
+  const P = boxCorners(G.bx, G.bh, G.Rb);
+  const mn=[Infinity,Infinity,Infinity], mx=[-Infinity,-Infinity,-Infinity];
+  for(const p of P) for(let i=0;i<3;i++){ if(p[i]<mn[i]) mn[i]=p[i]; if(p[i]>mx[i]) mx[i]=p[i]; }
+  return {mn, mx};
+}
+/* 机械臂长度：
+     · segs = 各段杆长 = 相邻坐标系原点之间的距离（就是各段 offset 的模）
+     · total = 各段之和 —— 这就是"把臂摊直了有多长"，与限位无关
+     · reach = 当前【限位】下末端离 base 原点的最远距离（从可达采样里量，是估计值）
+   ★ 不给"包围盒长宽高"：模型里没有杆件的碰撞体，臂的 yaw 限位也还没加，
+     拿骨架量长宽高只会得出假数（见文件头注释） */
+function armStats(){
+  const G = chassisGeom();
+  const segs = CHAIN.map(c => Math.hypot(c.offset[0], c.offset[1], c.offset[2]));
+  const total = segs.reduce((a,b)=>a+b, 0);
+  const b0 = MODEL.base.xyz;
+  const zG = G ? G.GC[2] : -Infinity;          // 地面 = 过接地中心、平行地面的那张平面
+  let reach = 0, zMax = -Infinity, zMin = Infinity, under = 0, used = 0;
+  for(const p of CLOUD){
+    /* ★ 地面以下的采样点直接丢掉：限位里没有地面，采出来的"地下点"是假的
+       （臂不可能穿透地面），算进"最大伸展"会把数字撑大 */
+    if(p[2] < zG){ under++; continue; }
+    used++;
+    const d = Math.hypot(p[0]-b0[0], p[1]-b0[1], p[2]-b0[2]);
+    if(d > reach) reach = d;
+    if(p[2] > zMax) zMax = p[2];
+    if(p[2] < zMin) zMin = p[2];
+  }
+  if(!used){ zMin = zMax = zG; }
+  return {segs, total, reach, zMin, zMax, n:CLOUD.length, used, under, zG};
+}
+
+function sizePanelHTML(){
+  const G = chassisGeom();
+  if(!G) return '<div id="sizeSect"></div>';
+  const A = armStats();
+  const R = boxRange(G);
+  const P = p => '(' + p.map(v=>v.toFixed(0)).join(', ') + ')';
+  const R2 = (mn,mx,i) => mn[i].toFixed(0)+' ~ '+mx[i].toFixed(0);
+  return `<div id="sizeSect">
+    <div class="sect">底盘碰撞箱 / 伸展尺寸（只显示，不参与运动学）</div>
+    <div class="grid">
+      <span>底盘中心点（base 系）</span><b>${CHASSIS.posMode==='base'?P(CHASSIS.pos):'—'}</b>
+      <span>底盘中心点（整机系）</span><b>${P(G.C)}</b>
+      <span>底盘箱范围（整机系）</span><b>x ${R2(R.mn,R.mx,0)} · y ${R2(R.mn,R.mx,1)} · z ${R2(R.mn,R.mx,2)}</b>
+      <span>接地中心（= 箱体底面中心）</span><b>${P(G.GC)}</b>
+      <span>球心 / 半径</span><b>${P(G.SC)} · R ${G.SR.toFixed(0)}</b>
+      <span>地面上限圈半径 √(R²−${G.ballH.toFixed(0)}²)</span><b>${G.planeR.toFixed(1)} mm</b>
+    </div>
+
+    <div class="sect">机械臂长度</div>
+    <div class="grid">
+      <span>各段杆长（相邻坐标系间距）</span><b>${A.segs.map(v=>v.toFixed(1)).join(' / ')} mm</b>
+      <span>杆长之和 ⇒ 机械臂长度</span><b>${A.total.toFixed(1)} mm</b>
+      <span>最大伸展（末端离 base 原点）</span><b>${A.reach.toFixed(0)} mm</b>
+      <span>末端高度范围 z</span><b>${A.zMin.toFixed(0)} ~ ${A.zMax.toFixed(0)} mm</b>
+    </div>
+    <div class="one" style="font-size:10.5px">
+      「杆长之和」是把臂摊直了的总长，与限位无关；「最大伸展」是<b>当前限位下</b>末端能到的最远处，
+      由 ${A.n} 个可达采样点量出（<b>估计值</b>）。<br>
+      ★ <b>只统计地面以上</b>的采样点：地面 = 过接地中心、平行地面的平面（z = ${A.zG.toFixed(0)}）。
+      本次 ${A.used}/${A.n} 个在地面以上，另有 <b>${A.under}</b> 个落到地面以下
+      —— 那是<b>限位没管地面</b>造成的假点（臂不可能穿透地面），全部剔除，否则"最大伸展"会被撑大。<br>
+      规则：长宽高 ≤ ${SIZER.lwh.join('×')}；⌀${(2*G.SR).toFixed(0)} 球、球心 = 接地中心 z 往上 ${G.ballH.toFixed(0)}。
+      <b>不报包围盒</b>：模型里没有杆件碰撞体、臂的 yaw 限位也还没加，量出来是假数。
+    </div>
+  </div>`;
+}
+/* 改底盘参数只重画尺寸段（analyzeTask 里的 IK 复核很贵，不要跟着重跑） */
+function refreshSize(){
+  const el = document.getElementById('dataBody');
+  if(!el) return;
+  const old = document.getElementById('sizeSect');
+  if(old) old.outerHTML = sizePanelHTML();
+  else if(PANEL_REST) el.innerHTML = sizePanelHTML() + PANEL_REST;
+}
+
+/* ==================================================================
+   右侧：底盘 / 伸展尺寸 设置面板
+   ================================================================== */
+function openChassisForm(force){
+  const f = document.getElementById('cform');
+  if(f.className === 'on' && !force){ f.className = ''; return; }   // 再点一次收起
+  f.className = 'on';
+  const num = (id,v,st) => `<input type="number" id="${id}" step="${st}" value="${v}">`;
+  f.innerHTML = `
+    <div class="fld" style="justify-content:space-between">
+      <b>底盘碰撞箱 / 伸展尺寸</b>
+      <span style="display:flex;gap:6px">
+        <button id="cReset">恢复默认</button>
+        <button id="cClose">收起</button>
+      </span>
+    </div>
+    <div class="fld"><label>中心点参照</label>
+      <label class="rad"><input type="radio" name="cPos" value="base"
+        ${CHASSIS.posMode==='base'?'checked':''}>相对 base 系</label>
+      <label class="rad"><input type="radio" name="cPos" value="origin"
+        ${CHASSIS.posMode!=='base'?'checked':''}>相对整机原点 O</label></div>
+    <div class="fld"><label>中心点坐标</label>
+      X ${num('cPx',CHASSIS.pos[0],1)} Y ${num('cPy',CHASSIS.pos[1],1)}
+      Z ${num('cPz',CHASSIS.pos[2],1)} mm</div>
+    <div class="sub">默认 base (0, 140, 0) ⇒ base 正 y 方向 140mm、与 base 同高</div>
+    <div class="fld"><label>箱体尺寸</label>
+      X ${num('cSx',CHASSIS.size[0],10)} Y ${num('cSy',CHASSIS.size[1],10)}
+      Z ${num('cSz',CHASSIS.size[2],10)} mm</div>
+    <div class="fld"><label>Z 延伸方向</label>
+      <select id="cZdir">
+        <option value="-1" ${CHASSIS.zDir<0?'selected':''}>−Z 向下（中心点 = 上表面中心）</option>
+        <option value="1"  ${CHASSIS.zDir>0?'selected':''}>+Z 向上（中心点 = 下表面中心）</option>
+      </select></div>
+    <div class="sub">x/y 以中心点为中心；接地中心 = 箱体底面中心（默认 = 中心点 − 105mm）</div>
+    <div class="fld"><label>长宽高限</label>
+      ${num('cLw',SIZER.lwh[0],10)} × ${num('cLh',SIZER.lwh[1],10)} × ${num('cLz',SIZER.lwh[2],10)} mm</div>
+    <div class="fld"><label>限制球</label>
+      直径 ${num('cBd',SIZER.ballD,50)} mm</div>
+    <div class="fld"><label></label>
+      球心距接地中心 ${num('cBh',SIZER.ballH,10)} mm（沿地面法向）</div>
+    <div class="sub">★ 改完离开输入框（或按回车）就生效，三维视图与数据面板同步刷新</div>`;
+  f.onchange = applyChassisForm;               // 事件委托：任一控件 change 即应用（不必滚到底找按钮）
+  document.getElementById('cClose').onclick = () => { f.className = ''; };
+  document.getElementById('cReset').onclick = () => {
+    Object.assign(CHASSIS, JSON.parse(JSON.stringify(CHASSIS_DEF)));
+    Object.assign(SIZER,   JSON.parse(JSON.stringify(SIZER_DEF)));
+    openChassisForm(true);                       // 重画表单 ⇒ 输入框回到默认值
+    applyChassisForm();
+  };
+}
+function applyChassisForm(){
+  const g = id => document.getElementById(id);
+  if(!g('cPx')) return;
+  CHASSIS.posMode = document.querySelector('input[name=cPos]:checked').value;
+  CHASSIS.pos  = [+g('cPx').value||0, +g('cPy').value||0, +g('cPz').value||0];
+  CHASSIS.size = [+g('cSx').value||0, +g('cSy').value||0, +g('cSz').value||0];
+  CHASSIS.zDir = (+g('cZdir').value < 0) ? -1 : 1;
+  SIZER.lwh    = [+g('cLw').value||0, +g('cLh').value||0, +g('cLz').value||0];
+  SIZER.ballD  = +g('cBd').value||0;
+  SIZER.ballH  = +g('cBh').value||0;
+  refreshSize(); draw3D(); saveLocal();
+}
+
+/* ==================================================================
+   右栏上下分隔条：拖动改变「模型链 / 可达域」的高度（双击复原）
+   ------------------------------------------------------------------
+   做法是改两栏的 flex **百分比**（不是写死 px）：
+     #list flex: p%   #dataPanel flex: (1−p)%
+   两栏 grow/shrink 都是 1、basis 合计 100%，所以最终高度严格是 p·F 与 (1−p)·F
+   （F = 扣掉两栏表头/表单之后的可用高度）—— 拖动距离和目标高度是 1:1 的，
+   而且窗口一改高度、表单一张开，比例自动跟着走，不用自己算像素。
+   ================================================================== */
+let SPLIT_PCT = null;                       // 当前比例；null = 还没初始化
+const SPLIT_DEF = .38;                      // 默认：模型链 38% / 可达域 62%
+                                            // （CSS 里那份默认比例把模型链压得只剩 ~130px，太挤）
+function setSplitPct(p){
+  p = Math.max(.16, Math.min(.84, p));      // 两边都不许被拖没（也避让两栏的 min-height）
+  document.getElementById('list').style.flex     = '1 1 ' + (p*100).toFixed(2) + '%';
+  document.getElementById('dataPanel').style.flex = '1 1 ' + ((1-p)*100).toFixed(2) + '%';
+  SPLIT_PCT = p;
+}
+function applySplit(){
+  const l = document.getElementById('list'), d = document.getElementById('dataPanel');
+  if(!l || !d) return;
+  setSplitPct(SPLIT_PCT == null ? SPLIT_DEF : SPLIT_PCT);
+}
+(function(){
+  const sp = document.getElementById('split');
+  if(!sp) return;
+  const list = document.getElementById('list'), pan = document.getElementById('dataPanel');
+  let drag = null;
+  sp.addEventListener('mousedown', e => {
+    const a = list.getBoundingClientRect(), b = pan.getBoundingClientRect();
+    drag = {y:e.clientY, h:a.height, tot:a.height + b.height};
+    sp.classList.add('on'); document.body.style.cursor = 'ns-resize';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if(!drag) return;
+    setSplitPct((drag.h + (e.clientY - drag.y)) / Math.max(1, drag.tot));
+  });
+  window.addEventListener('mouseup', () => {
+    if(!drag) return;
+    drag = null; sp.classList.remove('on'); document.body.style.cursor = '';
+    saveLocal();
+  });
+  sp.addEventListener('dblclick', () => {    // 双击复原成默认比例
+    SPLIT_PCT = SPLIT_DEF; applySplit(); saveLocal();
+  });
+  applySplit();                              // 进来就按默认比例摆好
+})();
+
+/* ---------------- 控件接线 ---------------- */
+document.getElementById('btnChassis').onclick = () => openChassisForm();
+const CB_MAP = {cbChassis:'chassis', cbLWH:'lwh', cbBall:'ball'};
+function syncBoxChecks(){                    // 存档恢复后再回填一次（loadCfg 在 DOMContentLoaded 里跑）
+  for(const id in CB_MAP){
+    const el = document.getElementById(id);
+    if(el) el.checked = SHOWBOX[CB_MAP[id]] !== false;
+  }
+  syncFrameBtn();
+}
+function syncFrameBtn(){                     // 一键按钮的文案跟着两个框的实际状态走
+  const b = document.getElementById('btnFrames'); if(!b) return;
+  const anyOn = (SHOWBOX.chassis !== false) || (SHOWBOX.lwh !== false);
+  b.textContent = anyOn ? '▣ 隐藏框' : '▣ 显示框';
+  b.title = anyOn ? '把【底盘框】和【长宽高框】一起藏起来'
+                  : '把【底盘框】和【长宽高框】一起显示出来';
+}
+document.getElementById('btnFrames').onclick = () => {          // ★ 一键同时开关两个框
+  const on = !((SHOWBOX.chassis !== false) || (SHOWBOX.lwh !== false));
+  SHOWBOX.chassis = SHOWBOX.lwh = on;
+  syncBoxChecks(); draw3D(); saveLocal();
+};
+for(const id in CB_MAP){
+  document.getElementById(id).onchange = e => {
+    SHOWBOX[CB_MAP[id]] = e.target.checked; syncFrameBtn(); draw3D(); saveLocal();
+  };
+}
+/* 自检钩子：#size 直接打开底盘/尺寸面板；SIZEINFO() 供无头自检读取全部推导值 */
+window.addEventListener('DOMContentLoaded', () => {
+  syncBoxChecks();
+  if(location.hash.indexOf('size') >= 0) openChassisForm(true);
+});
+window.SIZEINFO = function(){
+  const G = chassisGeom(); if(!G) return null;
+  const A = armStats(), R = boxRange(G);
+  return {baseYaw: MODEL.base.yaw, C:G.C, box:{c:G.bx, h:G.bh}, range:R, GC:G.GC,
+          SC:G.SC, SR:G.SR, planeR:G.planeR, lwh:SIZER.lwh,
+          segs:A.segs, armLen:A.total, reach:A.reach, zMin:A.zMin, zMax:A.zMax,
+          cloudN:A.n, showbox:{chassis:SHOWBOX.chassis, lwh:SHOWBOX.lwh, ball:SHOWBOX.ball}};
+};
+</script>
+</body>
+</html>
+

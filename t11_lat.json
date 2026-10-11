@@ -1,0 +1,11 @@
+{
+ "note": "到底哪一根『弄直』才有肉：link3.x 横偏 85.5 vs link4.y 侧偏 −30（5 套 × 96 位姿 × 12 起点 × 400 迭代）",
+ "sets": [20260925, 111, 222, 333, 444],
+ "cfg": { "nPose": 96, "budget": 12, "iters": 400, "eTol": 3, "aTol": 3, "mGate": 5, "mCap": 15 },
+ "cands": [
+  { "tag": "基准 横偏85.5 侧偏−30", "vals": {} },
+  { "tag": "link3.x 完全弄直 → 0", "vals": { "link3.x": 0 } },
+  { "tag": "link3.x → 45", "vals": { "link3.x": 45 } },
+  { "tag": "link3.x→45 且 link4 弄直", "vals": { "link3.x": 45, "link4.y": 0, "link4.z": 402.59 } }
+ ]
+}

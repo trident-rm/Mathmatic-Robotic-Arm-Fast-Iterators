@@ -1,0 +1,16 @@
+﻿const fs=require('fs');
+const rows=fs.readFileSync('t8_ik_diag.csv','utf8').trim().split('\n').slice(1).map(l=>l.split(','));
+const f=rows.filter(r=>r[7]==='0');
+const ang=f.map(r=>+r[9]*180/Math.PI).sort((a,b)=>a-b);
+const e=f.map(r=>+r[8]).sort((a,b)=>a-b);
+const q=(a,p)=>a[Math.floor(a.length*p)];
+console.log('面板原样 3 起点失败样本: '+f.length+' / '+rows.length);
+console.log('  位置误差(mm)  中位 '+q(e,0.5).toFixed(1)+'  p10 '+q(e,0.1).toFixed(1)+'  p90 '+q(e,0.9).toFixed(1)+'  最大 '+e[e.length-1].toFixed(0));
+console.log('  姿态偏差(°)   中位 '+q(ang,0.5).toFixed(1)+'  p10 '+q(ang,0.1).toFixed(1)+'  p90 '+q(ang,0.9).toFixed(1)+'  最大 '+ang[ang.length-1].toFixed(0));
+const near=f.filter(r=>(+r[8]<3 && +r[9]*180/Math.PI<15)).length;
+const posBad=f.filter(r=>+r[8]>=3).length;
+const angBad=f.filter(r=>(+r[8]<3 && +r[9]*180/Math.PI>=15)).length;
+console.log('  位置已达标、只差姿态(3~15°): '+near);
+console.log('  位置就没达到(>3mm)        : '+posBad);
+console.log('  位置达标但姿态差>15°       : '+angBad);
+console.log('  这些位姿在强多起点下可解    : '+f.filter(r=>r[10]==='1').length+' / '+f.length);

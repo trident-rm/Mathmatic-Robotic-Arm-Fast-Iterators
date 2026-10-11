@@ -1,0 +1,30 @@
+  /* ---- 连杆调参面板（armLink 追加，不改动上面任何一条） ---- */
+  #lform{border-top:1px solid #3a4a22;padding:10px 12px;background:#111827;
+         max-height:72%;overflow-y:auto;display:none}
+  #lform.on{display:block}
+  #lform .sect{margin:10px 0 5px;font-size:11px;font-weight:600;color:#9fd4ff;
+        border-bottom:1px solid #223052;padding-bottom:3px}
+  #lform .sect:first-child{margin-top:2px}
+  #lform table{width:100%;border-collapse:collapse;font-size:11px;margin:2px 0 4px}
+  #lform th{color:#7d8cab;font-weight:400;font-size:10.5px;text-align:left;padding:1px 3px}
+  #lform td{padding:1px 3px;border-bottom:1px solid #1b2436;font-variant-numeric:tabular-nums}
+  #lform tbody tr:hover{background:#16203000}
+  #lform .num{text-align:right;font-variant-numeric:tabular-nums}
+  #lform .kn{color:#c9d6ee}
+  #lform input[type=number]{width:58px;padding:1px 4px}
+  #lform input[type=text]{width:96px;padding:1px 4px}
+  #lform select{padding:1px 4px}
+  #lform .mini{padding:1px 6px;font-size:10.5px}
+  #lform .bar{height:7px;background:#0b1020;border:1px solid var(--line);border-radius:4px;
+        overflow:hidden;margin:5px 0 3px}
+  #lform .bar i{display:block;height:100%;width:0;background:#2f6fb0}
+  #lform tr.best{background:#12261b}
+  #lform tr.cur td{color:#ffe066}
+  #lform tr.rowc{cursor:pointer}
+  #lform .cmp{display:flex;gap:10px;align-items:flex-start}
+  #lform .cmp canvas{flex:1;height:158px;background:#0b1020;border:1px solid var(--line);border-radius:6px}
+  #lform .cmp .lst{width:132px;font-size:10.5px;color:var(--dim);line-height:1.6}
+  #lform .warn{color:#ffb454}
+  #lform .good{color:var(--ok)}
+  #lform .bad{color:var(--warn)}
+  #lform .note{color:#5d6b88;font-size:10.5px;line-height:1.6}

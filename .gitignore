@@ -1,0 +1,27 @@
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- 探针产物：由 t*.m / t*.js 重新生成，不入库 ----
+# 原始采样点云 dump（每个约 2.8 MB，由 t0_probe_rtb_rst.m 写出）
+t0_ws_A.csv
+t0_ws_B.csv
+# 逐个位姿 IK 诊断明细（由 t8_ik_diag.js 写出，t9i_failprofile.js 读取）
+t8_ik_diag.csv
+
+# ---- 无头自检每次重新生成的副本 ----
+t10_ui_probe.html
+t10_both_probe.html
+t11_ui_probe.html
+
+# ---- 打包产物（t10_pack.js 写到仓库上一级） ----
+../Pack/
+Pack/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+~$*

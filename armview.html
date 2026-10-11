@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>机械臂可行性集</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2d; --line:#26314a; --fg:#e6ecf7; --dim:#8fa0bf;
+    --box:#5a6580; --cres:#3ea6ff; --warn:#ffb454; --ok:#4ade80; --axis:#e879f9;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;overflow:hidden}
+  #app{display:flex;flex-direction:column;height:100%}
+  #hdr{padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);
+       display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  #title{font-size:14px;font-weight:600;margin-right:6px}
+  #model{color:var(--dim);font-size:11px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#0b1020;border:1px solid var(--line);border-radius:999px;
+        padding:3px 10px;font-size:11px;color:var(--dim);white-space:nowrap}
+  .chip b{color:var(--fg);font-weight:600}
+  #views{flex:1;display:flex;min-height:0}
+  .cell{flex:1;position:relative;min-width:0;border-right:1px solid var(--line)}
+  .cell:last-child{border-right:0}
+  .cap{position:absolute;left:12px;top:10px;font-size:11px;color:var(--dim);
+       background:rgba(11,16,32,.72);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .hint{position:absolute;right:12px;bottom:10px;font-size:10px;color:#5d6b88}
+  #chain{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--dim);
+         background:rgba(11,16,32,.78);border:1px solid var(--line);border-radius:6px;
+         padding:6px 9px;max-width:64%;line-height:1.7}
+  #chain b{color:var(--fg);font-weight:600}
+  #chain .fx{color:#8fa0bf}
+  canvas{display:block;width:100%;height:100%}
+  #legend{display:flex;gap:16px;padding:7px 14px;border-top:1px solid var(--line);
+          background:var(--panel);font-size:11px;color:var(--dim);flex-wrap:wrap}
+  .k{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+  #tools{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:11px;color:var(--dim)}
+  #tools button{background:#0b1020;color:var(--fg);border:1px solid var(--line);
+    border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit}
+  #tools button:hover{border-color:#3d4c6e}
+  #tools button.on{border-color:#3ea6ff;color:#9fd4ff}
+  #tools label{cursor:pointer;user-select:none}
+
+  /* ---- 关节面板 ---- */
+  #jointPanel{position:absolute;left:12px;top:46px;width:262px;max-height:62%;
+    overflow-y:auto;background:rgba(11,16,32,.94);border:1px solid var(--line);
+    border-radius:8px;padding:8px 6px 6px;font-size:11px;z-index:5}
+  #jointPanel.hidden{display:none}
+  .jp-head{display:flex;justify-content:space-between;align-items:center;
+    padding:0 6px 6px;color:var(--dim)}
+  .jp-head button{background:transparent;color:var(--dim);border:1px solid var(--line);
+    border-radius:5px;padding:1px 7px;font-size:10px;cursor:pointer;font-family:inherit}
+  .jp-head button:hover{color:var(--fg);border-color:#3d4c6e}
+  .jrow{display:flex;justify-content:space-between;align-items:center;gap:8px;
+    padding:5px 8px;border-radius:5px;cursor:pointer}
+  .jrow:hover{background:#1b2438}
+  .jrow.active{background:#1e2a44}
+  .jrow .jn{color:var(--fg)}
+  .jrow .jn .fx{color:#8fa0bf;font-size:10px}
+  .jrow .jv{color:var(--dim);font-variant-numeric:tabular-nums}
+  .jrow.active .jv{color:#9fd4ff}
+  .jslider{padding:0 10px 8px}
+  .jslider input{width:100%;accent-color:#3ea6ff}
+  .jends{display:flex;justify-content:space-between;color:#5d6b88;font-size:10px}
+  .jp-foot{padding:6px 8px 2px;border-top:1px solid var(--line);color:var(--dim);
+    font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <div>
+      <div id="title">机械臂可行性集</div>
+      <div id="model"></div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="tools">
+      <button id="jointBtn">🎛 关节</button>
+      <label class="k"><input type="checkbox" id="showFrames" checked> 坐标架</label>
+      <label class="k"><input type="checkbox" id="auto"> 自动刷新 3s</label>
+      <button id="reload">⟳ 重新载入</button>
+    </div>
+  </div>
+  <div id="views">
+    <div class="cell"><canvas id="c3d"></canvas>
+      <div class="cap">任务空间 · 拖拽旋转 / 滚轮缩放 · 原点坐标系 O 常显</div>
+      <div id="jointPanel" class="hidden">
+        <div class="jp-head"><span>关节角度（拖动即时重算）</span>
+          <button id="jpReset">重置</button></div>
+        <div id="jpList"></div>
+        <div class="jp-foot" id="jpEE"></div>
+      </div>
+      <div id="chain"></div>
+      <div class="hint" id="camhint"></div>
+    </div>
+    <div class="cell"><canvas id="cjs"></canvas>
+      <div class="cap" id="jscap">关节空间</div>
+      <div class="hint">黑框 = 区间限位外包</div>
+    </div>
+  </div>
+  <div id="legend">
+    <span class="k"><i class="sw" style="background:#ff5f5f"></i>X</span>
+    <span class="k"><i class="sw" style="background:#5fff8f"></i>Y</span>
+    <span class="k"><i class="sw" style="background:#5f9fff"></i>Z</span>
+    <span class="k"><i class="sw" style="background:#e8933a"></i>杆（= 相邻坐标系的间距）</span>
+    <span class="k"><i class="sw" style="background:#e879f9"></i>关节轴</span>
+    <span class="k"><i class="sw" style="background:#ffe066"></i>当前关节</span>
+    <span class="k"><i class="sw" style="background:#5a6580"></i>区间盒可达</span>
+    <span class="k"><i class="sw" style="background:#3ea6ff"></i>月牙内可达</span>
+    <span class="k" id="lgbox"></span>
+  </div>
+</div>
+<script>
+"use strict";
+let P = null, cam = {yaw:-0.9, pitch:0.42, zoom:1};
+let Q = [];                  // 当前关节角（deg，按可动关节顺序）
+let activeJoint = -1;        // 正在拖动的可动关节序号
+let showFrames = true;       // 是否显示各 body 的随动坐标系
+const D2R = Math.PI/180;
+const FX = ["#ff5f5f","#5fff8f","#5f9fff"], FXN = ["X","Y","Z"];
+const I3 = [[1,0,0],[0,1,0],[0,0,1]];
+
+/* ================= 入口：uihtml 模式 / 独立 HTML 模式共用 ================= */
+let COMP = null;
+function setup(component){
+  try{
+    COMP = component;
+    component.addEventListener("DataChanged", ev => { if(ev.Data){ render(ev.Data); ping(); } });
+    if(component.Data) render(component.Data);
+    ping();
+  }catch(e){ console.error(e); }
+}
+function ping(){
+  if(!COMP || !P) return;
+  try{
+    COMP.sendEventToMATLAB("rendered", {ok:true, title:P.meta.title,
+        nJoint:P.meta.nJoint, points:P.cloud.cres.length});
+  }catch(e){ console.error(e); }
+}
+window.addEventListener("DOMContentLoaded", () => {
+  if(window.__ARM_DATA__) render(window.__ARM_DATA__);
+  dumpIfAsked();
+});
+
+// #dump：把 JS 自己算出来的各坐标系原点/三轴【以大字铺满页面】，
+// 供无头截图读出，再与 MATLAB 的 chainFK 对表（渲染正确性的硬验证）。
+// （Edge 的 --dump-dom 在本机不输出，所以走"渲染成大字形再截图"这条路）
+function dumpIfAsked(){
+  if(location.hash.indexOf("dump") < 0 || !P) return;
+  const F = fkAll();
+  const lines = ["q0(deg) = " + Q.join(", ")];
+  for(const f of F){
+    const ax = v => mulv(f.R, v).map(x => (x>=0?" ":"") + x.toFixed(5)).join("  ");
+    lines.push("");
+    lines.push(f.name + "  (joint: " + (f.joint || "-") + ")");
+    lines.push("  o = " + f.t.map(x => (x>=0?" ":"") + x.toFixed(2)).join("  "));
+    lines.push("  X = " + ax([1,0,0]));
+    lines.push("  Y = " + ax([0,1,0]));
+    lines.push("  Z = " + ax([0,0,1]));
+  }
+  document.body.innerHTML =
+    '<pre style="margin:0;padding:16px;background:#0f1420;color:#e6ecf7;' +
+    'font:16px/1.55 Consolas,monospace;white-space:pre">' +
+    lines.join("\n").replace(/&/g,"&amp;").replace(/</g,"&lt;") + "</pre>";
+}
+
+/* ================= 主渲染 ================= */
+function render(data){
+  const nJold = P ? P.meta.nJoint : -1;
+  P = data;
+  P.boxes = Array.isArray(P.boxes) ? P.boxes : (P.boxes ? [P.boxes] : []);
+  P.nodes = Array.isArray(P.nodes) ? P.nodes : [P.nodes];
+  P.kin   = Array.isArray(P.kin)   ? P.kin   : [P.kin];
+  if(nJold !== P.meta.nJoint || Q.length !== P.meta.nJoint){
+    Q = (P.q0 || []).slice();          // 关节数变了才重置角度，否则保留用户拖动的位置
+    activeJoint = -1;
+  }
+  const s = P.stats, nJ = P.meta.nJoint;
+  document.getElementById("title").textContent = P.meta.title;
+  document.getElementById("model").textContent = P.meta.model + " · " + P.meta.generated;
+
+  const chips = [chip("关节数", nJ)];
+  if(nJ > 0){
+    chips.push(chip("采样", s.nSample.toLocaleString()));
+    chips.push(chip("月牙内占比", s.feasRate.toFixed(2) + "%"));
+    chips.push(chip("关节空间可行面积", s.areaFrac.toFixed(2) + "%"));
+    chips.push(chip("可达半径", Math.round(s.rMin) + "~" + Math.round(s.rMax) + " mm"));
+    chips.push(chip("体素 50mm", s.voxBox + " → " + s.voxCres));
+    if(P.boxes.length) chips.push(chip("任务域合计", s.inAnyBox.toFixed(2) + "%"));
+  } else {
+    chips.push(chip("状态", "仅 base link，尚无关节"));
+  }
+  document.getElementById("chips").innerHTML = chips.join("");
+
+  document.getElementById("chain").innerHTML = chainHTML();
+  document.getElementById("lgbox").textContent = P.boxes.map(b =>
+      b.name + " " + b.cov.toFixed(2) + "%").join("　");
+  const C = P.crescent;
+  document.getElementById("jscap").textContent = (C.on && nJ >= 2)
+      ? ("关节空间 q" + C.qi + " - q" + C.qj + "（月牙 大盘" + C.R_OUT + "° 减小盘" + C.R_IN + "°@" + C.CY2 + "°）")
+      : "关节空间（月牙未启用）";
+
+  buildJointPanel();
+  resizeAll();
+  // 通过 #joints 打开：便于无头截图 / 直接分享；必须等 render 之后（此时 P 才有值）
+  if(location.hash.indexOf("joints") >= 0) openPanel();
+}
+const chip = (k,v) => `<span class="chip">${k} <b>${v}</b></span>`;
+
+function chainHTML(){
+  const names = P.nodes.map((n,i) => {
+    let jt = "";
+    if(i >= 2){
+      if(n.type === "fixed"){ jt = '<span class="fx"> [fixed]</span>'; }
+      else {
+        const lim = n.unlimited ? "不限(全周)"
+                                : (n.lim ? n.lim[0] + "~" + n.lim[1] + "°" : "不限");
+        jt = `<span class="fx"> [${n.joint ? n.joint + ": " : ""}${n.type} ${n.axLabel} ${lim}]</span>`;
+      }
+    }
+    return (i ? " → " : "") + "<b>" + n.name + "</b>" + jt;
+  });
+  return "链：" + names.join("");
+}
+
+/* ================= 关节面板 ================= */
+function buildJointPanel(){
+  const list = document.getElementById("jpList");
+  list.innerHTML = "";
+  const mov = [];
+  P.kin.forEach(k => { if(k.movable) mov.push(k); });
+  mov.forEach((k, qi) => {
+    const row = document.createElement("div");
+    row.className = "jrow" + (qi === activeJoint ? " active" : "");
+    row.innerHTML = `<span class="jn">${k.joint || k.name} <span class="fx">${k.axLabel}</span></span>
+                     <span class="jv" id="jv${qi}">${Q[qi].toFixed(1)}°</span>`;
+    row.addEventListener("click", () => toggleJoint(qi, row));
+    list.appendChild(row);
+
+    const lo = k.unlimited ? -180 : k.lim[0];
+    const hi = k.unlimited ?  180 : k.lim[1];
+    const box = document.createElement("div");
+    box.className = "jslider"; box.id = "js" + qi;
+    box.style.display = (qi === activeJoint) ? "block" : "none";
+    box.innerHTML = `<input type="range" min="${lo}" max="${hi}" step="1" value="${Q[qi]}" id="jr${qi}">
+                     <div class="jends"><span>${lo}°</span><span>${hi}°</span></div>`;
+    list.appendChild(box);
+    const inp = box.querySelector("input");
+    inp.addEventListener("input", () => {
+      Q[qi] = parseFloat(inp.value);
+      document.getElementById("jv" + qi).textContent = Q[qi].toFixed(1) + "°";
+      activeJoint = qi;
+      markActive();
+      draw3D(); drawJS();
+    });
+  });
+  document.getElementById("jointPanel").classList.remove("hidden");
+  updateEE();
+}
+function openPanel(){
+  const panel = document.getElementById("jointPanel");
+  document.getElementById("jointBtn").classList.add("on");
+  panel.classList.remove("hidden");
+  // 展开第一个关节的滑条，省一次点击；再点该关节可收起
+  if(activeJoint < 0 && P && P.meta.nJoint > 0){ activeJoint = 0; buildJointPanel(); }
+}
+function markActive(){
+  document.querySelectorAll("#jpList .jrow").forEach((r, i) => {
+    r.classList.toggle("active", i === activeJoint);
+  });
+}
+function toggleJoint(qi, row){
+  const box = document.getElementById("js" + qi);
+  const shown = box.style.display !== "none";
+  box.style.display = shown ? "none" : "block";
+  activeJoint = shown ? -1 : qi;
+  markActive();
+  draw3D();
+}
+function updateEE(){
+  if(!P) return;
+  const F = fkAll();
+  const e = F[F.length - 1].t;
+  document.getElementById("jpEE").textContent =
+      "末端 " + (P.kin[P.kin.length-1].name || "EE") +
+      "  x " + e[0].toFixed(1) + "  y " + e[1].toFixed(1) + "  z " + e[2].toFixed(1) + " mm";
+}
+
+/* ================= JS 正解（与 MATLAB chainFK 同一递推） ================= */
+/*   T_i = T_{i-1} · Trans(offset_i) · Rot(axis_i, q_i)                       */
+function rotAxis(u, th){
+  const x=u[0], y=u[1], z=u[2], c=Math.cos(th), s=Math.sin(th), C=1-c;
+  return [
+    [c+x*x*C,   x*y*C-z*s, x*z*C+y*s],
+    [y*x*C+z*s, c+y*y*C,   y*z*C-x*s],
+    [z*x*C-y*s, z*y*C+x*s, c+z*z*C  ]
+  ];
+}
+function mul3(A,B){
+  const C = [[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    let s=0; for(let k=0;k<3;k++) s += A[i][k]*B[k][j];
+    C[i][j]=s;
+  }
+  return C;
+}
+function mulv(A,v){
+  return [ A[0][0]*v[0]+A[0][1]*v[1]+A[0][2]*v[2],
+           A[1][0]*v[0]+A[1][1]*v[1]+A[1][2]*v[2],
+           A[2][0]*v[0]+A[2][1]*v[1]+A[2][2]*v[2] ];
+}
+function compose(A,B){          // A·B（{R,t} 形式）
+  return { R: mul3(A.R, B.R), t: [ A.R[0][0]*B.t[0]+A.R[0][1]*B.t[1]+A.R[0][2]*B.t[2] + A.t[0],
+                                   A.R[1][0]*B.t[0]+A.R[1][1]*B.t[1]+A.R[1][2]*B.t[2] + A.t[1],
+                                   A.R[2][0]*B.t[0]+A.R[2][1]*B.t[1]+A.R[2][2]*B.t[2] + A.t[2] ] };
+}
+function coincideWithOrigin(t, R){
+  // 位置与姿态都与原点坐标系重合？（重合就不再重复画一套三轴）
+  if(Math.hypot(t[0], t[1], t[2]) > 1e-6) return false;
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    const e = (i===j) ? 1 : 0;
+    if(Math.abs(R[i][j] - e) > 1e-9) return false;
+  }
+  return true;
+}
+
+function fkAll(){  const a = (P.base.yaw || 0) * D2R;
+  let T = { R: [[Math.cos(a),-Math.sin(a),0],[Math.sin(a),Math.cos(a),0],[0,0,1]],
+            t: P.base.xyz.slice() };
+  const out = [{name:"base(臂安装)", joint:"", R:T.R, t:T.t, axis:[0,0,0], movable:false, qi:-1}];
+  let qi = 0;
+  for(const k of P.kin){
+    let Rj = I3;
+    if(k.movable){
+      const ax = k.axis, n = Math.hypot(ax[0],ax[1],ax[2]);
+      if(n > 1e-12) Rj = rotAxis([ax[0]/n, ax[1]/n, ax[2]/n], (Q[qi]||0)*D2R);
+      qi++;
+    }
+    // 固定变换 = 旋转 rot（可选）+ 平移 offset
+    let Rf = I3;
+    if(Array.isArray(k.rot) && k.rot.length === 3) Rf = k.rot;
+    T = compose(compose(T, {R:Rf, t:k.offset}), {R:Rj, t:[0,0,0]});
+    out.push({name:k.name, joint:k.joint, R:T.R, t:T.t, axis:k.axis,
+              movable:k.movable, qi: qi-1});
+  }
+  return out;
+}
+
+/* ================= 画布 ================= */
+function resizeAll(){
+  for(const id of ["c3d","cjs"]) fitCanvas(document.getElementById(id));
+  if(P){ draw3D(); drawJS(); }
+}
+window.addEventListener("resize", resizeAll);
+
+function fitCanvas(c){
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = Math.max(1, Math.round(r.width*dpr));
+  c.height = Math.max(1, Math.round(r.height*dpr));
+  const g = c.getContext("2d");
+  g.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width, h:r.height};
+}
+
+function proj(p){
+  const a = cam.yaw, b = cam.pitch;
+  const x1 =  p[0]*Math.cos(a) - p[1]*Math.sin(a);
+  const y1 =  p[0]*Math.sin(a) + p[1]*Math.cos(a);
+  const z1 =  p[2];
+  const y2 =  y1*Math.cos(b) + z1*Math.sin(b);
+  const z2 = -y1*Math.sin(b) + z1*Math.cos(b);
+  return [x1, z2, y2];
+}
+
+function draw3D(){
+  const c = document.getElementById("c3d"); if(!c || !P) return;
+  const {w,h} = fitCanvas(c); const g = c.getContext("2d");
+  g.clearRect(0,0,w,h);
+  const F = fkAll();
+
+  // 视野自适配
+  let pts = P.cloud.box.concat(P.cloud.cres);
+  if(pts.length === 0) pts = F.map(f => f.t);
+  let cx=0, cy=0, cz=0;
+  for(const p of pts){ cx+=p[0]; cy+=p[1]; cz+=p[2]; }
+  const n = Math.max(1, pts.length); cx/=n; cy/=n; cz/=n;
+  let rad = 1;
+  for(const p of pts){ rad = Math.max(rad, Math.hypot(p[0]-cx, p[1]-cy, p[2]-cz)); }
+  if(rad < 50) rad = 300;      // 退化情形（场景里只有一个点）
+  const sc = Math.min(w,h)*0.42/rad*cam.zoom;
+  const S = p => { const q = proj([p[0]-cx, p[1]-cy, p[2]-cz]);
+                   return [w/2 + q[0]*sc, h/2 - q[1]*sc, q[2]]; };
+  // 带深色描边的文字，压在点云上也读得清
+  const label = (txt, x, y, color, font) => {
+    g.font = font || "11px system-ui,'Microsoft YaHei'";
+    g.lineWidth = 3;
+    g.strokeStyle = "rgba(10,14,24,.85)";
+    g.strokeText(txt, x, y);
+    g.fillStyle = color;
+    g.fillText(txt, x, y);
+  };
+  const triad = (o, R, len, lw, withNames, font) => {
+    for(let a=0;a<3;a++){
+      const d = [R[0][a], R[1][a], R[2][a]];
+      const p0 = S(o), p1 = S([o[0]+d[0]*len, o[1]+d[1]*len, o[2]+d[2]*len]);
+      g.strokeStyle = FX[a]; g.lineWidth = lw;
+      g.beginPath(); g.moveTo(p0[0],p0[1]); g.lineTo(p1[0],p1[1]); g.stroke();
+      if(withNames) label(FXN[a], p1[0]+3, p1[1]-3, FX[a], font);
+    }
+  };
+
+  // 地面网格
+  g.strokeStyle = "rgba(255,255,255,.05)"; g.lineWidth = 1;
+  const E = Math.ceil(rad/200)*200;
+  for(let v=-E; v<=E; v+=200){
+    const a1=S([v+cx,-E+cy,-cz]), a2=S([v+cx,E+cy,-cz]);
+    const b1=S([-E+cx,v+cy,-cz]), b2=S([E+cx,v+cy,-cz]);
+    g.beginPath(); g.moveTo(a1[0],a1[1]); g.lineTo(a2[0],a2[1]);
+                   g.moveTo(b1[0],b1[1]); g.lineTo(b2[0],b2[1]); g.stroke();
+  }
+
+  // 点云
+  const drawCloud = (arr, color, r, alpha) => {
+    if(!arr.length) return;
+    g.globalAlpha = alpha; g.fillStyle = color;
+    const q = arr.map(p => S(p)).sort((A,B) => B[2]-A[2]);
+    for(const s of q){ g.beginPath(); g.arc(s[0], s[1], r, 0, 6.2832); g.fill(); }
+    g.globalAlpha = 1;
+  };
+  drawCloud(P.cloud.box, "#5a6580", 1.5, .5);
+  drawCloud(P.cloud.cres, "#3ea6ff", 1.7, .85);
+
+  // 任务域
+  g.strokeStyle = "#4ade80"; g.lineWidth = 1.2;
+  for(const b of P.boxes){
+    const c8 = [];
+    for(const i of [0,1]) for(const j of [0,1]) for(const k of [0,1])
+      c8.push([b.box[0][i], b.box[1][j], b.box[2][k]]);
+    const E2 = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+    g.beginPath();
+    for(const e of E2){ const a=S(c8[e[0]]), d=S(c8[e[1]]);
+      g.moveTo(a[0],a[1]); g.lineTo(d[0],d[1]); }
+    g.stroke();
+  }
+
+  // 各 body 的"杆" = 相邻两个坐标系之间的连线（= offset 本身），
+  // 就是下面这条骨架折线，没有额外的杆字段
+  if(F.length > 1){
+    g.strokeStyle = "#e8933a"; g.lineWidth = 7; g.lineJoin = "round"; g.lineCap = "round";
+    g.beginPath();
+    F.forEach((f,i) => { const s = S(f.t); i ? g.lineTo(s[0],s[1]) : g.moveTo(s[0],s[1]); });
+    g.stroke();
+    g.lineCap = "butt";
+  }
+
+  // 各 body 只画"它自己那套随动的坐标系"：三根轴 + X/Y/Z 名字 + body 名字。
+  // 若某 body 的坐标系与原点坐标系完全重合（位置+姿态），就不再重复画一套（例如零位的 base_link）。
+  for(let i=1;i<F.length;i++){
+    const f = F[i];
+    if(showFrames && !coincideWithOrigin(f.t, f.R))
+      triad(f.t, f.R, 95, 1.8, true, "bold 12px system-ui,'Microsoft YaHei'");
+    const s = S(f.t);
+    label(f.name, s[0]+7, s[1]+15, "#c9d6ee", "11px system-ui,'Microsoft YaHei'");
+  }
+
+  // 原点坐标系 O：常显、加粗、带 X/Y/Z 名字
+  triad([0,0,0], [[1,0,0],[0,1,0],[0,0,1]], 170, 2.6, true,
+        "bold 12px system-ui,'Microsoft YaHei'");
+  const so = S([0,0,0]);
+  label("O 原点", so[0]+7, so[1]-7, "#ffffff", "bold 12px system-ui,'Microsoft YaHei'");
+
+  // 关节轴：最后画、更长，避免与坐标轴重合时被盖住；当前拖动的那条高亮；轴上标关节名
+  for(let i=1;i<F.length;i++){
+    const f = F[i];
+    if(!f.movable) continue;
+    const ax = f.axis, nn = Math.hypot(ax[0],ax[1],ax[2]); if(nn < 1e-12) continue;
+    const d = mulv(f.R, [ax[0]/nn, ax[1]/nn, ax[2]/nn]);
+    const L = 210, p0 = S(f.t);
+    const p1 = S([f.t[0]+d[0]*L, f.t[1]+d[1]*L, f.t[2]+d[2]*L]);
+    const hot = (f.qi === activeJoint);
+    g.strokeStyle = hot ? "#ffe066" : "#e879f9"; g.lineWidth = hot ? 4 : 3;
+    g.beginPath(); g.moveTo(p0[0],p0[1]); g.lineTo(p1[0],p1[1]); g.stroke();
+    const ang = Math.atan2(p1[1]-p0[1], p1[0]-p0[0]);
+    g.beginPath();
+    g.moveTo(p1[0],p1[1]);
+    g.lineTo(p1[0]-11*Math.cos(ang-0.4), p1[1]-11*Math.sin(ang-0.4));
+    g.lineTo(p1[0]-11*Math.cos(ang+0.4), p1[1]-11*Math.sin(ang+0.4));
+    g.closePath(); g.fillStyle = g.strokeStyle; g.fill();
+    label((f.joint || f.name), p1[0]+5, p1[1]+13, g.strokeStyle,
+          "bold 11px system-ui,'Microsoft YaHei'");
+  }
+
+  // 末端标记
+  const ee = F[F.length-1].t, se = S(ee);
+  g.fillStyle = "#4ade80";
+  g.beginPath(); g.arc(se[0], se[1], 5, 0, 6.2832); g.fill();
+
+  document.getElementById("camhint").textContent =
+      "yaw " + Math.round(-cam.yaw/D2R) + "°  pitch " + Math.round(cam.pitch/D2R) + "°  zoom " + cam.zoom.toFixed(2);
+}
+
+/* ================= 2D：关节空间 ================= */
+function drawJS(){
+  const c = document.getElementById("cjs"); if(!c || !P) return;
+  const {w,h} = fitCanvas(c); const g = c.getContext("2d");
+  g.clearRect(0,0,w,h);
+  const C = P.crescent;
+  const pad = 44, W = w-pad-16, H = h-pad-16;
+
+  if(!C.on || P.meta.nJoint < 2){
+    g.fillStyle = "#5d6b88"; g.font = "13px system-ui,'Microsoft YaHei'";
+    g.textAlign = "center";
+    g.fillText(P.meta.nJoint < 2 ? "关节数不足 2，暂无可显示的耦合平面"
+                                 : "月牙限位未启用", w/2, h/2-8);
+    g.fillStyle = "#3d475e"; g.font = "11px system-ui,'Microsoft YaHei'";
+    g.fillText(P.meta.nJoint < 2 ? "补全 armSpec.m 后重跑" : "在左侧勾选「月牙限位」后显示",
+               w/2, h/2+14);
+    g.textAlign = "left";
+    return;
+  }
+  const bx = C.box;
+  const X = v => pad + (v-bx[0][0])/(bx[0][1]-bx[0][0])*W;
+  const Y = v => h-pad - (v-bx[1][0])/(bx[1][1]-bx[1][0])*H;
+
+  const nr = C.grid.length, nc = C.grid[0].length, cw = W/nc, ch = H/nr;
+  for(let r=0;r<nr;r++) for(let cI=0;cI<nc;cI++){
+    const v = C.grid[r][cI];
+    if(v <= 0){ g.fillStyle = `rgba(62,166,255,${0.95-0.45*Math.min(1,-v/25)})`; }
+    else      { g.fillStyle = `rgba(35,44,64,${0.85+0.15*Math.min(1,v/25)})`; }
+    g.fillRect(X(C.gi[cI])-cw/2, Y(C.gj[r])-ch/2, cw+1, ch+1);
+  }
+  g.strokeStyle = "#e6ecf7"; g.lineWidth = 1.4; g.setLineDash([6,4]);
+  g.strokeRect(X(bx[0][0]), Y(bx[1][1]), X(bx[0][1])-X(bx[0][0]), Y(bx[1][0])-Y(bx[1][1]));
+  g.setLineDash([]);
+  g.fillStyle = "rgba(255,255,255,.75)";
+  for(const d of C.dots){ g.beginPath(); g.arc(X(d[0]), Y(d[1]), 1.1, 0, 6.2832); g.fill(); }
+
+  // 当前位形十字标
+  const qa = Q[C.qi-1], qb = Q[C.qj-1];
+  if(qa !== undefined && qb !== undefined){
+    const px = X(qa), py = Y(qb);
+    g.strokeStyle = "#ffe066"; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(px-9,py); g.lineTo(px+9,py);
+                   g.moveTo(px,py-9); g.lineTo(px,py+9); g.stroke();
+    g.beginPath(); g.arc(px, py, 4, 0, 6.2832);
+    g.strokeStyle = "#ffe066"; g.stroke();
+  }
+
+  g.strokeStyle = "#8fa0bf"; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(pad,16); g.lineTo(pad,h-pad); g.lineTo(w-16,h-pad); g.stroke();
+  g.fillStyle = "#8fa0bf"; g.font = "12px system-ui,'Microsoft YaHei'";
+  g.textAlign = "center";
+  for(let k=0;k<=4;k++){
+    const v = bx[0][0] + (bx[0][1]-bx[0][0])*k/4;
+    g.fillText(Math.round(v), X(v), h-pad+18);
+  }
+  g.textAlign = "right";
+  for(let k=0;k<=4;k++){
+    const v = bx[1][0] + (bx[1][1]-bx[1][0])*k/4;
+    g.fillText(Math.round(v), pad-8, Y(v)+4);
+  }
+  g.textAlign = "center";
+  g.fillText("q" + C.qi + " (deg)", pad+W/2, h-8);
+  g.save(); g.translate(13, pad+H/2); g.rotate(-Math.PI/2);
+  g.fillText("q" + C.qj + " (deg)", 0, 0); g.restore();
+}
+
+/* ================= 交互 ================= */
+(function(){                       // 关节面板开关 / 重置
+  const panel = document.getElementById("jointPanel");
+  const btn = document.getElementById("jointBtn");
+  btn.addEventListener("click", () => {
+    if(panel.classList.contains("hidden")){ openPanel(); }
+    else { panel.classList.add("hidden"); btn.classList.remove("on"); }
+  });
+  document.getElementById("jpReset").addEventListener("click", () => {
+    Q = (P.q0 || []).slice();
+    buildJointPanel(); draw3D(); drawJS();
+  });
+})();
+
+(function(){                       // 坐标架显示开关
+  const cb = document.getElementById("showFrames");
+  cb.checked = showFrames;
+  cb.addEventListener("change", () => { showFrames = cb.checked; draw3D(); });
+})();
+
+(function(){                       // 重新载入 / 自动刷新
+  const auto = document.getElementById("auto"), btn = document.getElementById("reload");
+  let timer = null;
+  const ls = (k, v) => { try{ if(v === undefined) return localStorage.getItem(k);
+                              localStorage.setItem(k, v); }catch(e){ return null; } };
+  function apply(){
+    if(timer){ clearInterval(timer); timer = null; }
+    if(auto.checked && !COMP && location.protocol === "file:"){
+      timer = setInterval(() => location.reload(), 3000);
+    }
+  }
+  if(COMP){ auto.disabled = true; btn.disabled = true; }
+  else {
+    auto.checked = ls("armAuto") === "1";
+    auto.addEventListener("change", () => { ls("armAuto", auto.checked ? "1" : "0"); apply(); });
+    btn.addEventListener("click", () => location.reload());
+    apply();
+  }
+})();
+
+(function(){                       // 旋转 / 缩放
+  let drag = null;
+  const c3 = document.getElementById("c3d");
+  if(!c3) return;
+  c3.addEventListener("mousedown", e => { drag = {x:e.clientX, y:e.clientY}; e.preventDefault(); });
+  window.addEventListener("mouseup", () => drag = null);
+  window.addEventListener("mousemove", e => {
+    if(!drag) return;
+    cam.yaw   -= (e.clientX-drag.x)*0.008;
+    cam.pitch += (e.clientY-drag.y)*0.008;
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch));
+    drag = {x:e.clientX, y:e.clientY};
+    draw3D();
+  });
+  c3.addEventListener("wheel", e => {
+    e.preventDefault();
+    cam.zoom = Math.max(0.25, Math.min(6, cam.zoom * (e.deltaY>0?0.92:1.08)));
+    draw3D();
+  }, {passive:false});
+})();
+</script>
+<!--ARM_DATA-->
+</body>
+</html>
