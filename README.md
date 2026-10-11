@@ -204,6 +204,18 @@ node web/pack/t10_pack.js      # 打成一个 zip 放进 ../Pack/
    `t11_link_tune.js` 里那条"原 3 个 `<script>` 与 armLink 逐字节相同"的比对。
 3. **入库门槛**。`web/build.js` 里的 `EXPECTED_ARM_BUILDER_MD5` 是**故意写死**的：
    以后谁无意中改了模块导致产物变化，构建会立刻失败，必须显式更新这个常量。
+4. **行尾锁死成 LF**（`.gitattributes`）。这一条是踩出来的坑：
+   交付物既然是"逐字节合成 + 断言 md5"，**行尾就不能随平台变**。
+   Windows 上 `core.autocrlf=true` 会把源文件检出成 CRLF，合成出来的 HTML 就多出
+   1847 个 `\r`（99912 字节 vs 98065），md5 直接对不上 ——
+   **别人克隆下来第一次构建就失败**。所以：
+   - `.gitattributes` 里源码/文档一律 `text eol=lf`，图片等标记 `binary`；
+   - 构建链自己也不依赖行尾：`assemble.js` / `t11_patch.js` 读文件统一
+     `\r\n → \n`、写文件统一 LF，自检比对前也先统一。
+
+   > 这个 bug 在开发机上**测不出来**（当时工作区恰好还是 LF），
+   > 是靠"**把仓库重新 clone 一份，在干净副本里跑构建**"才暴露的。
+   > 所以每次改完构建链，都建议这样验一次，别只信本地。
 
 ---
 
